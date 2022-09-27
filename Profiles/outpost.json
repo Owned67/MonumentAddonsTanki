@@ -2,6 +2,7 @@
   "Name": "outpost",
   "Author": "[F4F] Tanki 21/10/2020 :'(",
   "SchemaVersion": 2.0,
+  "Url": "https://github.com/Owned67/MonumentAddonsTanki/blob/main/Profiles/outpost.json?raw=true",
   "MonumentData": {
     "compound": {
       "Entities": [
@@ -9,13 +10,13 @@
           "Id": "87273562-7307-4e29-a3fc-2fd3e762de82",
           "PrefabName": "assets/bundled/prefabs/static/recycler_static.prefab",
           "Position": {
-            "x": 1.67775047,
-            "y": 0.254428864,
-            "z": 8.985353
+            "x": 1.77325428,
+            "y": 0.249914169,
+            "z": 9.04227
           },
           "RotationAngles": {
             "x": 0.0,
-            "y": 261.125061,
+            "y": 270.514526,
             "z": 0.0
           }
         },
@@ -58,6 +59,34 @@
           "RotationAngles": {
             "x": 0.0,
             "y": 222.262741,
+            "z": 0.0
+          }
+        },
+        {
+          "Id": "80113d52-8fb3-473b-973e-10cde4ed6946",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -31.92376,
+            "y": 0.256015778,
+            "z": 39.82212
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 180.003326,
+            "z": 0.0
+          }
+        },
+        {
+          "Id": "24120f20-ad9e-4b8e-84ac-c5ed100774a2",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": 8.296284,
+            "y": 0.0912208557,
+            "z": -33.2775154
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 89.6684952,
             "z": 0.0
           }
         }
