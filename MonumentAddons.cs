@@ -17,16 +17,19 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 using VLB;
+using static IOEntity;
+using static WireTool;
 
 using CustomSpawnCallback = System.Func<UnityEngine.Vector3, UnityEngine.Quaternion, Newtonsoft.Json.Linq.JObject, UnityEngine.Component>;
 using CustomKillCallback = System.Action<UnityEngine.Component>;
 using CustomUpdateCallback = System.Action<UnityEngine.Component, Newtonsoft.Json.Linq.JObject>;
 using CustomAddDisplayInfoCallback = System.Action<UnityEngine.Component, Newtonsoft.Json.Linq.JObject, System.Text.StringBuilder>;
 using CustomSetDataCallback = System.Action<UnityEngine.Component, object>;
+using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Monument Addons", "WhiteThunder", "0.12.0")]
+    [Info("Monument Addons", "WhiteThunder", "0.13.0")]
     [Description("Allows adding entities, spawn points and more to monuments.")]
     internal class MonumentAddons : CovalencePlugin
     {
@@ -46,6 +49,9 @@ namespace Oxide.Plugins
         private const float ShowVanillaDuration = 60;
 
         private const string PermissionAdmin = "monumentaddons.admin";
+
+        private const string WireToolPlugEffect = "assets/prefabs/tools/wire/effects/plugeffect.prefab";
+        private const string HoseToolPlugEffect = "assets/prefabs/tools/hose/effects/waterplugeffect.prefab";
 
         private const string CargoShipShortName = "cargoshiptest";
         private const string DefaultProfileName = "Default";
@@ -69,6 +75,8 @@ namespace Oxide.Plugins
         private readonly CustomAddonManager _customAddonManager;
         private readonly UniqueNameRegistry _uniqueNameRegistry = new UniqueNameRegistry();
         private readonly AdapterDisplayManager _adapterDisplayManager;
+        private readonly MonumentHelper _monumentHelper;
+        private readonly WireToolManager _wireToolManager;
 
         private readonly Color[] _distinctColors = new Color[]
         {
@@ -81,7 +89,7 @@ namespace Oxide.Plugins
             new Color(1, 1, 1),
         };
 
-        private readonly object _cancelHook = false;
+        private readonly object False = false;
 
         private ItemDefinition _waterDefinition;
         private ProtectionProperties _immortalProtection;
@@ -98,6 +106,8 @@ namespace Oxide.Plugins
             _adapterListenerManager = new AdapterListenerManager(this);
             _customAddonManager = new CustomAddonManager(this);
             _controllerFactory = new ControllerFactory(this);
+            _monumentHelper = new MonumentHelper(this);
+            _wireToolManager = new WireToolManager(this, _profileStore, _entityTracker);
 
             _saveProfileStateDebounced = new ActionDebounced(timer, 1, () =>
             {
@@ -125,11 +135,6 @@ namespace Oxide.Plugins
 
             Unsubscribe(nameof(OnEntitySpawned));
 
-            if (!_pluginConfig.StoreCustomVendingSetupSettingsInProfiles)
-            {
-                Unsubscribe(nameof(OnCustomVendingSetupDataProvider));
-            }
-
             _adapterListenerManager.Init();
         }
 
@@ -143,6 +148,7 @@ namespace Oxide.Plugins
 
             _uniqueNameRegistry.OnServerInitialized();
             _adapterListenerManager.OnServerInitialized();
+            _monumentHelper.OnServerInitialized();
 
             var entitiesToKill = _profileStateData.CleanDisabledProfileState();
             if (entitiesToKill.Count > 0)
@@ -161,6 +167,7 @@ namespace Oxide.Plugins
             _coroutineManager.Destroy();
             _profileManager.UnloadAllProfiles();
             _saveProfileStateDebounced.Flush();
+            _wireToolManager.Unload();
 
             UnityEngine.Object.Destroy(_immortalProtection);
 
@@ -202,7 +209,7 @@ namespace Oxide.Plugins
         private object canRemove(BasePlayer player, BaseEntity entity)
         {
             if (_entityTracker.IsMonumentEntity(entity))
-                return _cancelHook;
+                return False;
 
             return null;
         }
@@ -210,7 +217,7 @@ namespace Oxide.Plugins
         private object CanChangeGrade(BasePlayer player, BuildingBlock block, BuildingGrade.Enum grade)
         {
             if (_entityTracker.IsMonumentEntity(block) && !HasAdminPermission(player))
-                return _cancelHook;
+                return False;
 
             return null;
         }
@@ -220,7 +227,7 @@ namespace Oxide.Plugins
             if (_entityTracker.IsMonumentEntity(signage as BaseEntity) && !HasAdminPermission(player))
             {
                 ChatMessage(player, LangEntry.ErrorNoPermission);
-                return _cancelHook;
+                return False;
             }
 
             return null;
@@ -271,6 +278,14 @@ namespace Oxide.Plugins
             _profileStore.Save(controller.Profile);
         }
 
+        private object OnSprayRemove(SprayCanSpray spray, BasePlayer player)
+        {
+            if (_entityTracker.IsMonumentEntity(spray))
+                return False;
+
+            return null;
+        }
+
         private void OnEntityScaled(BaseEntity entity, float scale)
         {
             SingleEntityController controller;
@@ -297,7 +312,7 @@ namespace Oxide.Plugins
         private object CanStartTelekinesis(BasePlayer player, BaseEntity moveEntity)
         {
             if (_entityTracker.IsMonumentEntity(moveEntity) && !HasAdminPermission(player))
-                return _cancelHook;
+                return False;
 
             return null;
         }
@@ -307,6 +322,15 @@ namespace Oxide.Plugins
         {
             if (_entityTracker.IsMonumentEntity(moveEntity))
                 _adapterDisplayManager.ShowAllRepeatedly(player);
+
+            if (GetSpawnPointAdapter(moveEntity) != null)
+            {
+                _adapterDisplayManager.ShowAllRepeatedly(player);
+
+                var spawnedVehicleComponent = moveEntity.GetComponent<SpawnedVehicleComponent>();
+                if (spawnedVehicleComponent != null)
+                    spawnedVehicleComponent.CancelInvoke(spawnedVehicleComponent.CheckPositionTracked);
+            }
         }
 
         // This hook is exposed by plugin: Telekinesis.
@@ -315,16 +339,44 @@ namespace Oxide.Plugins
             SingleEntityAdapter adapter;
             SingleEntityController controller;
 
-            if (!_entityTracker.IsMonumentEntity(moveEntity, out adapter, out controller))
-                return;
+            int adapterCount;
+            string profileName;
 
-            if (!adapter.TrySaveAndApplyChanges())
+            var spawnPointAdapter = GetSpawnPointAdapter(moveEntity);
+
+            if (spawnPointAdapter != null)
+            {
+                if (!spawnPointAdapter.Monument.IsInBounds(moveEntity.transform.position))
+                    return;
+
+                var localPosition = spawnPointAdapter.Monument.InverseTransformPoint(moveEntity.transform.position);
+
+                spawnPointAdapter.SpawnPointData.Position = localPosition;
+                spawnPointAdapter.SpawnPointData.RotationAngles = (Quaternion.Inverse(spawnPointAdapter.Monument.Rotation) * moveEntity.transform.rotation).eulerAngles;
+                spawnPointAdapter.SpawnPointData.SnapToTerrain = IsOnTerrain(moveEntity.transform.position);
+                _profileStore.Save(spawnPointAdapter.Profile);
+
+                var spawnGroupController = spawnPointAdapter.Controller as SpawnGroupController;
+                spawnGroupController.UpdateSpawnGroups();
+
+                adapterCount = spawnGroupController.Adapters.Count;
+                profileName = spawnPointAdapter.Profile.Name;
+            }
+            else if (_entityTracker.IsMonumentEntity(moveEntity, out adapter, out controller))
+            {
+                if (!adapter.TrySaveAndApplyChanges())
+                    return;
+
+                adapterCount = controller.Adapters.Count;
+                profileName = controller.Profile.Name;
+            }
+            else
                 return;
 
             if (player != null)
             {
                 _adapterDisplayManager.ShowAllRepeatedly(player);
-                ChatMessage(player, LangEntry.SaveSuccess, controller.Adapters.Count, controller.Profile.Name);
+                ChatMessage(player, LangEntry.SaveSuccess, adapterCount, profileName);
             }
         }
 
@@ -368,33 +420,6 @@ namespace Oxide.Plugins
 
             return true;
         }
-
-        private MonumentAdapter GetClosestMonumentAdapter(Vector3 position)
-        {
-            var dictResult = MonumentFinder.Call("API_GetClosest", position) as Dictionary<string, object>;
-            if (dictResult == null)
-                return null;
-
-            return new MonumentAdapter(dictResult);
-        }
-
-        private List<BaseMonument> WrapFindMonumentResults(List<Dictionary<string, object>> dictList)
-        {
-            if (dictList == null)
-                return null;
-
-            var monumentList = new List<BaseMonument>();
-            foreach (var dict in dictList)
-                monumentList.Add(new MonumentAdapter(dict));
-
-            return monumentList;
-        }
-
-        private List<BaseMonument> FindMonumentsByAlias(string alias) =>
-            WrapFindMonumentResults(MonumentFinder.Call("API_FindByAlias", alias) as List<Dictionary<string, object>>);
-
-        private List<BaseMonument> FindMonumentsByShortName(string shortName) =>
-            WrapFindMonumentResults(MonumentFinder.Call("API_FindByShortName", shortName) as List<Dictionary<string, object>>);
 
         private float GetEntityScale(BaseEntity entity)
         {
@@ -527,12 +552,13 @@ namespace Oxide.Plugins
             Vector3 position;
             BaseMonument monument;
             CustomAddonDefinition addonDefinition;
+            ulong skinId;
 
             if (player.IsServer
                 || !VerifyHasPermission(player)
                 || !VerifyMonumentFinderLoaded(player)
                 || !VerifyProfileSelected(player, out profileController)
-                || !VerifyValidPrefabOrDeployable(player, args, out prefabName, out addonDefinition)
+                || !VerifyValidPrefabOrDeployable(player, args, out prefabName, out addonDefinition, out skinId)
                 || !VerifyHitPosition(player, out position)
                 || !VerifyAtMonument(player, position, out monument))
                 return;
@@ -564,10 +590,16 @@ namespace Oxide.Plugins
                         localPosition.y -= 1.5f;
                     }
                 }
+                else if (shortPrefabName == "spray.decal")
+                {
+                    localRotationAngles.x += 270;
+                    localRotationAngles.y -= 90;
+                }
 
                 addonData = new EntityData
                 {
                     Id = Guid.NewGuid(),
+                    Skin = skinId,
                     PrefabName = prefabName,
                     Position = localPosition,
                     RotationAngles = localRotationAngles,
@@ -2266,6 +2298,38 @@ namespace Oxide.Plugins
             ReplyToPlayer(player, LangEntry.GenerateSuccess, profileName);
         }
 
+        [Command("mawire")]
+        private void CommandWire(IPlayer player, string cmd, string[] args)
+        {
+            if (player.IsServer || !VerifyHasPermission(player))
+                return;
+
+            var basePlayer = player.Object as BasePlayer;
+            if (_wireToolManager.HasPlayer(basePlayer) && args.Length == 0)
+            {
+                _wireToolManager.StopSession(basePlayer);
+                return;
+            }
+
+            var wireColor = WireColour.Default;
+            if (args.Length > 0 && !Enum.TryParse<WireColour>(args[0], ignoreCase: true, result: out wireColor))
+            {
+                ReplyToPlayer(player, LangEntry.WireToolInvalidColor, args[0]);
+                return;
+            }
+
+            var activeItemShortName = basePlayer.GetActiveItem()?.info.shortname;
+            if (activeItemShortName != "wiretool" && activeItemShortName != "hosetool")
+            {
+                ReplyToPlayer(player, LangEntry.WireToolNotEquipped);
+                return;
+            }
+
+            _wireToolManager.StartOrUpdateSession(basePlayer, wireColor);
+
+            ChatMessage(basePlayer, LangEntry.WireToolActivated, wireColor);
+        }
+
         [Command("mahelp")]
         private void CommandHelp(IPlayer player, string cmd, string[] args)
         {
@@ -2484,9 +2548,10 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private bool VerifyValidPrefabOrDeployable(IPlayer player, string[] args, out string prefabPath, out CustomAddonDefinition addonDefinition)
+        private bool VerifyValidPrefabOrDeployable(IPlayer player, string[] args, out string prefabPath, out CustomAddonDefinition addonDefinition, out ulong skinId)
         {
             var prefabArg = args.FirstOrDefault();
+            skinId = 0;
 
             // Ignore "True" argument because that simply means the player used a key bind.
             if (!string.IsNullOrWhiteSpace(prefabArg) && prefabArg != "True")
@@ -2497,7 +2562,7 @@ namespace Oxide.Plugins
             addonDefinition = null;
 
             var basePlayer = player.Object as BasePlayer;
-            var deployablePrefab = DeterminePrefabFromPlayerActiveDeployable(basePlayer);
+            var deployablePrefab = DeterminePrefabFromPlayerActiveDeployable(basePlayer, out skinId);
             if (!string.IsNullOrEmpty(deployablePrefab))
             {
                 prefabPath = deployablePrefab;
@@ -2831,6 +2896,11 @@ namespace Oxide.Plugins
             return Physics.Raycast(player.eyes.HeadRay(), out hit, maxDistance, HitLayers, QueryTriggerInteraction.Ignore);
         }
 
+        private static bool TrySphereCast(BasePlayer player, out RaycastHit hit, int layerMask, float radius, float maxDistance = MaxRaycastDistance)
+        {
+            return Physics.SphereCast(player.eyes.HeadRay(), radius, out hit, maxDistance, layerMask, QueryTriggerInteraction.Ignore);
+        }
+
         private static bool TryGetHitPosition(BasePlayer player, out Vector3 position)
         {
             RaycastHit hit;
@@ -2842,6 +2912,28 @@ namespace Oxide.Plugins
 
             position = Vector3.zero;
             return false;
+        }
+
+        private static T GetLookEntity<T>(BasePlayer player, float maxDistance = MaxRaycastDistance) where T : BaseEntity
+        {
+            RaycastHit hit;
+            return TryRaycast(player, out hit, maxDistance)
+                ? hit.GetEntity() as T
+                : null;
+        }
+
+        public static T GetLookEntitySphereCast<T>(BasePlayer player, int layerMask, float radius, float maxDistance = MaxRaycastDistance) where T : BaseEntity
+        {
+            RaycastHit hit;
+            return TrySphereCast(player, out hit, layerMask, radius, maxDistance)
+                ? hit.GetEntity() as T
+                : null;
+        }
+
+        private static void SendEffect(BasePlayer player, string effectPrefab)
+        {
+            var effect = new Effect(effectPrefab, player, 0, Vector3.zero, Vector3.forward);
+            EffectNetwork.Send(effect, player.net.connection);
         }
 
         private static bool IsOnTerrain(Vector3 position) =>
@@ -3065,7 +3157,7 @@ namespace Oxide.Plugins
             if (OnCargoShip(player, position, out cargoShipMonument))
                 return cargoShipMonument;
 
-            return GetClosestMonumentAdapter(position);
+            return _monumentHelper.GetClosestMonumentAdapter(position);
         }
 
         private List<BaseMonument> GetMonumentsByAliasOrShortName(string aliasOrShortName)
@@ -3082,11 +3174,11 @@ namespace Oxide.Plugins
                 return cargoShipList.Count > 0 ? cargoShipList : null;
             }
 
-            var monuments = FindMonumentsByAlias(aliasOrShortName);
+            var monuments = _monumentHelper.FindMonumentsByAlias(aliasOrShortName);
             if (monuments.Count > 0)
                 return monuments;
 
-            return FindMonumentsByShortName(aliasOrShortName);
+            return _monumentHelper.FindMonumentsByShortName(aliasOrShortName);
         }
 
         private IEnumerator SpawnAllProfilesRoutine()
@@ -3095,9 +3187,12 @@ namespace Oxide.Plugins
             yield return null;
             yield return _profileManager.LoadAllProfilesRoutine();
 
-            // We don't want to be subscribed to OnEntitySpawned(CargoShip) until the coroutine is done.
-            // Otherwise, a cargo ship could spawn while the coroutine is running and could get double entities.
-            Subscribe(nameof(OnEntitySpawned));
+            if (_pluginConfig.EnableDynamicMonuments)
+            {
+                // We don't want to be subscribed to OnEntitySpawned(CargoShip) until the coroutine is done.
+                // Otherwise, a cargo ship could spawn while the coroutine is running and could get double entities.
+                Subscribe(nameof(OnEntitySpawned));
+            }
         }
 
         private void StartupRoutine()
@@ -3151,11 +3246,15 @@ namespace Oxide.Plugins
             );
         }
 
-        private string DeterminePrefabFromPlayerActiveDeployable(BasePlayer basePlayer)
+        private string DeterminePrefabFromPlayerActiveDeployable(BasePlayer basePlayer, out ulong skinId)
         {
+            skinId = 0;
+
             var activeItem = basePlayer.GetActiveItem();
             if (activeItem == null)
                 return null;
+
+            skinId = activeItem.skin;
 
             string overridePrefabPath;
             if (_pluginConfig.DeployableOverrides.TryGetValue(activeItem.info.shortname, out overridePrefabPath))
@@ -3269,7 +3368,7 @@ namespace Oxide.Plugins
 
         private static class EntityUtils
         {
-            public static T GetNearbyEntity<T>(BaseEntity originEntity, float maxDistance, int layerMask, string filterShortPrefabName = null) where T : BaseEntity
+            public static T GetNearbyEntity<T>(BaseEntity originEntity, float maxDistance, int layerMask = -1, string filterShortPrefabName = null) where T : BaseEntity
             {
                 var entityList = new List<T>();
                 Vis.Entities(originEntity.transform.position, maxDistance, entityList, layerMask, QueryTriggerInteraction.Ignore);
@@ -3279,6 +3378,28 @@ namespace Oxide.Plugins
                         return entity;
                 }
                 return null;
+            }
+
+            public static T GetClosestNearbyEntity<T>(Vector3 position, float maxDistance, int layerMask = -1) where T : BaseEntity
+            {
+                var entityList = Facepunch.Pool.GetList<T>();
+                Vis.Entities(position, maxDistance, entityList, layerMask, QueryTriggerInteraction.Ignore);
+
+                T closestEntity = null;
+                float closestDistanceSquared = float.MaxValue;
+
+                foreach (var entity in entityList)
+                {
+                    var distance = (entity.transform.position - position).sqrMagnitude;
+                    if (distance < closestDistanceSquared)
+                    {
+                        closestDistanceSquared = distance;
+                        closestEntity = entity;
+                    }
+                }
+
+                Facepunch.Pool.FreeList(ref entityList);
+                return closestEntity;
             }
 
             public static void ConnectNearbyVehicleSpawner(VehicleVendor vehicleVendor)
@@ -3310,6 +3431,16 @@ namespace Oxide.Plugins
                     return;
 
                 vehicleVendor.spawnerRef.Set(vehicleSpawner);
+            }
+
+            public static void ConnectNearbyDoor(DoorManipulator doorManipulator)
+            {
+                // The door manipulator normally checks on layer 21, but use layerMask -1 to allow finding arctic garage doors.
+                var door = EntityUtils.GetClosestNearbyEntity<Door>(doorManipulator.transform.position, 3);
+                if (door == null || door.IsDestroyed)
+                    return;
+
+                doorManipulator.SetTargetDoor(door);
             }
         }
 
@@ -3527,6 +3658,628 @@ namespace Oxide.Plugins
             }
         }
 
+        private class WireToolManager
+        {
+            private const float DrawDuration = 3;
+            private const float DrawSlotRadius = 0.04f;
+            private const float PreviewDotRadius = 0.01f;
+            private const float InputCooldown = 0.25f;
+            private const float HoldToClearDuration = 0.5f;
+
+            private const float DrawIntervalDuration = 0.01f;
+            private const float DrawIntervalWithBuffer = DrawIntervalDuration + 0.05f;
+            private const float MinAngleDot = 0.999f;
+
+            private class WireSession
+            {
+                public BasePlayer Player { get; private set; }
+                public WireColour WireColor;
+                public IOType WireType;
+                public SingleEntityAdapter Adapter;
+                public IOSlot StartSlot;
+                public int StartSlotIndex;
+                public bool IsSource;
+                public float LastInput;
+                public float SecondaryPressedTime = float.MaxValue;
+                public float LastDrawTime;
+
+                public List<Vector3> Points = new List<Vector3>();
+
+                public WireSession(BasePlayer player)
+                {
+                    Player = player;
+                }
+
+                public void Reset(bool refreshPoints = false)
+                {
+                    Points.Clear();
+                    if (refreshPoints)
+                    {
+                        RefreshPoints();
+                    }
+                    Adapter = null;
+                    SecondaryPressedTime = float.MaxValue;
+                }
+
+                public void StartConnection(SingleEntityAdapter adapter, IOSlot startSlot, int slotIndex, bool isSource)
+                {
+                    WireType = startSlot.type;
+                    Adapter = adapter;
+                    StartSlot = startSlot;
+                    StartSlotIndex = slotIndex;
+                    IsSource = isSource;
+                    startSlot.wireColour = WireColor;
+                }
+
+                public void AddPoint(Vector3 position)
+                {
+                    Points.Add(position);
+                    RefreshPoints();
+                }
+
+                public void RemoveLast()
+                {
+                    if (Points.Count > 0)
+                    {
+                        Points.RemoveAt(Points.Count - 1);
+                        RefreshPoints();
+                    }
+                    else
+                    {
+                        Reset(refreshPoints: true);
+                    }
+                }
+
+                public bool IsOnInputCooldown()
+                {
+                    return LastInput + InputCooldown > UnityEngine.Time.time;
+                }
+
+                public bool IsOnDrawCooldown()
+                {
+                    return LastDrawTime + DrawIntervalDuration > UnityEngine.Time.time;
+                }
+
+                public Vector3 GetStartPoint()
+                {
+                    return GetSlotPoint(StartSlot);
+                }
+
+                public void RefreshPoints()
+                {
+                    var ioEntity = Adapter?.Entity as IOEntity;
+                    if (ioEntity == null)
+                        return;
+
+                    var slot = IsSource
+                        ? ioEntity.outputs[StartSlotIndex]
+                        : ioEntity.inputs[StartSlotIndex];
+
+                    if (slot.type == IOType.Kinetic)
+                    {
+                        // Don't attempt to render wires for kinetic slots since that will kick the player.
+                        return;
+                    }
+
+                    slot.linePoints = new Vector3[Points.Count + 1];
+
+                    if (IsSource)
+                    {
+                        slot.linePoints[0] = slot.handlePosition;
+                        for (var i = 0; i < Points.Count; i++)
+                        {
+                            slot.linePoints[i + 1] = ioEntity.transform.InverseTransformPoint(Points[i]);
+                        }
+                    }
+                    else
+                    {
+                        // TODO: Implement a temporary entity to show a line from destination input
+                    }
+
+                    ioEntity.SendNetworkUpdate();
+                }
+
+                private Vector3 GetSlotPoint(IOSlot slot)
+                {
+                    return Adapter.Entity.transform.TransformPoint(slot.handlePosition);
+                }
+            }
+
+            private MonumentAddons _pluginInstance;
+            private ProfileStore _profileStore;
+            private MonumentEntityTracker _entityTracker;
+            private List<WireSession> _playerSessions = new List<WireSession>();
+            private Timer _timer;
+
+            public WireToolManager(MonumentAddons pluginInstance, ProfileStore profileStore, MonumentEntityTracker entityTracker)
+            {
+                _pluginInstance = pluginInstance;
+                _profileStore = profileStore;
+                _entityTracker = entityTracker;
+            }
+
+            public bool HasPlayer(BasePlayer player)
+            {
+                return GetPlayerSession(player) != null;
+            }
+
+            public void StartOrUpdateSession(BasePlayer player, WireColour wireColor)
+            {
+                int sessionIndex;
+                var session = GetPlayerSession(player, out sessionIndex);
+                if (session == null)
+                {
+                    session = new WireSession(player);
+                    _playerSessions.Add(session);
+                }
+
+                session.WireColor = wireColor;
+
+                if (_timer == null || _timer.Destroyed)
+                {
+                    _timer = _pluginInstance.timer.Every(0, ProcessPlayers);
+                }
+            }
+
+            public void StopSession(BasePlayer player)
+            {
+                int sessionIndex;
+                var session = GetPlayerSession(player, out sessionIndex);
+                if (session == null)
+                    return;
+
+                DestroySession(session, sessionIndex);
+            }
+
+            public void Unload()
+            {
+                for (var i = _playerSessions.Count - 1; i >= 0; i--)
+                {
+                    DestroySession(_playerSessions[i], i);
+                }
+            }
+
+            private WireSession GetPlayerSession(BasePlayer player, out int index)
+            {
+                for (var i = 0; i < _playerSessions.Count; i++)
+                {
+                    var session = _playerSessions[i];
+                    if (session.Player == player)
+                    {
+                        index = i;
+                        return session;
+                    }
+                }
+
+                index = 0;
+                return null;
+            }
+
+            private WireSession GetPlayerSession(BasePlayer player)
+            {
+                int index;
+                return GetPlayerSession(player, out index);
+            }
+
+            private void DestroySession(WireSession session, int index)
+            {
+                session.Reset(refreshPoints: true);
+                _playerSessions.RemoveAt(index);
+
+                if (_playerSessions.Count == 0 && _timer != null)
+                {
+                    _timer.Destroy();
+                    _timer = null;
+                }
+
+                _pluginInstance.ChatMessage(session.Player, LangEntry.WireToolDeactivated);
+            }
+
+            private SingleEntityAdapter GetLookIOAdapter(BasePlayer player, out IOEntity ioEntity)
+            {
+                ioEntity = GetLookEntitySphereCast<IOEntity>(player, Rust.Layers.Solid, 0.1f, 6);
+                if (ioEntity == null)
+                    return null;
+
+                SingleEntityAdapter adapter;
+                SingleEntityController controller;
+                if (!_entityTracker.IsMonumentEntity(ioEntity, out adapter, out controller))
+                {
+                    _pluginInstance.ChatMessage(player, LangEntry.ErrorEntityNotEligible);
+                    return null;
+                }
+
+                if (adapter == null)
+                {
+                    _pluginInstance.ChatMessage(player, LangEntry.ErrorNoSuitableAddonFound);
+                    return null;
+                }
+
+                return adapter;
+            }
+
+            private IOSlot GetClosestIOSlot(IOEntity ioEntity, Ray ray, float minDot, out int index, out float highestDot, bool wantsSourceSlot, bool? wantsOccupiedSlots = false)
+            {
+                IOSlot closestSlot = null;
+                index = 0;
+                highestDot = -1f;
+
+                var transform = ioEntity.transform;
+                var slotList = wantsSourceSlot ? ioEntity.outputs : ioEntity.inputs;
+
+                for (var slotIndex = 0; slotIndex < slotList.Length; slotIndex++)
+                {
+                    var slot = slotList[slotIndex];
+                    if (wantsOccupiedSlots.HasValue && wantsOccupiedSlots.Value == (slot.connectedTo.Get() == null))
+                        continue;
+
+                    var slotPosition = transform.TransformPoint(slot.handlePosition);
+
+                    var dot = Vector3.Dot(ray.direction, (slotPosition - ray.origin).normalized);
+                    if (dot > minDot && dot > highestDot)
+                    {
+                        closestSlot = slot;
+                        index = slotIndex;
+                        highestDot = dot;
+                    }
+                }
+
+                return closestSlot;
+            }
+
+            private IOSlot GetClosestIOSlot(IOEntity ioEntity, Ray ray, float minDot, out int index, out bool isSourceSlot, bool? wantsOccupiedSlots = null)
+            {
+                index = 0;
+                isSourceSlot = false;
+
+                int sourceSlotIndex;
+                float sourceDot;
+                var sourceSlot = GetClosestIOSlot(ioEntity, ray, minDot, out sourceSlotIndex, out sourceDot, wantsSourceSlot: true, wantsOccupiedSlots: wantsOccupiedSlots);
+
+                int destinationSlotIndex;
+                float destinationDot;
+                var destinationSlot = GetClosestIOSlot(ioEntity, ray, minDot, out destinationSlotIndex, out destinationDot, wantsSourceSlot: false, wantsOccupiedSlots: wantsOccupiedSlots);
+
+                if (sourceSlot == null && destinationSlot == null)
+                    return null;
+
+                if (sourceSlot != null && destinationSlot != null)
+                {
+                    if (sourceDot >= destinationDot)
+                    {
+                        isSourceSlot = true;
+                        index = sourceSlotIndex;
+                        return sourceSlot;
+                    }
+                    else
+                    {
+                        index = destinationSlotIndex;
+                        return destinationSlot;
+                    }
+                }
+
+                if (sourceSlot != null)
+                {
+                    isSourceSlot = true;
+                    index = sourceSlotIndex;
+                    return sourceSlot;
+                }
+
+                index = destinationSlotIndex;
+                return destinationSlot;
+            }
+
+            private bool CanPlayerUseTool(BasePlayer player)
+            {
+                if (player == null || player.IsDestroyed || !player.IsConnected || player.IsDead())
+                    return false;
+
+                var activeItemShortName = player.GetActiveItem()?.info.shortname;
+                if (activeItemShortName == null)
+                    return false;
+
+                return activeItemShortName == "wiretool" || activeItemShortName == "hosetool";
+            }
+
+            private Color DetermineSlotColor(IOSlot slot)
+            {
+                if (slot.connectedTo.Get() != null)
+                    return Color.red;
+
+                if (slot.type == IOType.Fluidic)
+                    return Color.cyan;
+
+                if (slot.type == IOType.Kinetic)
+                    return new Color(1, 0.5f, 0);
+
+                return Color.yellow;
+            }
+
+            private void ShowSlots(BasePlayer player, IOEntity ioEntity, bool showSourceSlots, bool denyOccupied = false)
+            {
+                var transform = ioEntity.transform;
+                var slotList = showSourceSlots ? ioEntity.outputs : ioEntity.inputs;
+
+                foreach (var slot in slotList)
+                {
+                    var color = DetermineSlotColor(slot);
+                    var position = transform.TransformPoint(slot.handlePosition);
+
+                    Ddraw.Sphere(player, position, DrawSlotRadius, color, DrawDuration);
+                    Ddraw.Text(player, position, showSourceSlots ? "OUT" : "IN", color, DrawDuration);
+                }
+            }
+
+            private void DrawSessionState(WireSession session)
+            {
+                if (session.Adapter == null || session.IsOnDrawCooldown())
+                    return;
+
+                var player = session.Player;
+                session.LastDrawTime = UnityEngine.Time.time;
+
+                var ioEntity = session.Adapter.Entity as IOEntity;
+                var startPosition = ioEntity.transform.TransformPoint(session.StartSlot.handlePosition);
+                Ddraw.Sphere(player, startPosition, DrawSlotRadius, Color.green, DrawIntervalWithBuffer);
+
+                Vector3 hitPosition;
+                if (TryGetHitPosition(player, out hitPosition))
+                {
+                    var lastPoint = session.Points.Count == 0
+                        ? session.StartSlot.handlePosition
+                        : session.StartSlot.linePoints.LastOrDefault();
+
+                    Ddraw.Sphere(player, hitPosition, PreviewDotRadius, Color.green, DrawIntervalWithBuffer);
+                    Ddraw.Line(player, ioEntity.transform.TransformPoint(lastPoint), hitPosition, Color.green, DrawIntervalWithBuffer);
+                }
+            }
+
+            private void MaybeStartWire(WireSession session, SingleEntityAdapter adapter)
+            {
+                var player = session.Player;
+                var ioEntity = adapter.Entity as IOEntity;
+
+                bool isSourceSlot;
+                int slotIndex;
+                var slot = GetClosestIOSlot(ioEntity, player.eyes.HeadRay(), MinAngleDot, out slotIndex, out isSourceSlot, wantsOccupiedSlots: false);
+                if (slot == null)
+                {
+                    ShowSlots(player, ioEntity, showSourceSlots: true, denyOccupied: true);
+                    ShowSlots(player, ioEntity, showSourceSlots: false, denyOccupied: true);
+                    return;
+                }
+
+                if (slot.connectedTo.Get() != null)
+                {
+                    Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.red, DrawDuration);
+                    return;
+                }
+
+                session.StartConnection(adapter, slot, slotIndex, isSource: isSourceSlot);
+                Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.green, DrawDuration);
+                SendEffect(player, WireToolPlugEffect);
+            }
+
+            private void MaybeEndWire(WireSession session, SingleEntityAdapter adapter)
+            {
+                var player = session.Player;
+                var ioEntity = adapter.Entity as IOEntity;
+
+                var headRay = player.eyes.HeadRay();
+                int slotIndex;
+                float distanceSquared;
+                var slot = GetClosestIOSlot(ioEntity, headRay, MinAngleDot, out slotIndex, out distanceSquared, wantsSourceSlot: !session.IsSource);
+                if (slot == null)
+                {
+                    slot = GetClosestIOSlot(ioEntity, headRay, MinAngleDot, out slotIndex, out distanceSquared, wantsSourceSlot: session.IsSource);
+                    if (slot != null)
+                    {
+                        Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.red, DrawDuration);
+                    }
+
+                    ShowSlots(player, ioEntity, showSourceSlots: !session.IsSource, denyOccupied: true);
+                    return;
+                }
+
+                if (slot.connectedTo.Get() != null)
+                {
+                    Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.red, DrawDuration);
+                    return;
+                }
+
+                var adapterProfile = adapter.Controller.Profile;
+                var sessionProfile = session.Adapter.Controller.Profile;
+                if (adapterProfile != sessionProfile)
+                {
+                    Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.red, DrawDuration);
+                    _pluginInstance.ChatMessage(player, LangEntry.WireToolProfileMismatch, sessionProfile, adapterProfile.Name);
+                    return;
+                }
+
+                if (!adapter.Monument.IsSameAs(session.Adapter.Monument))
+                {
+                    Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.red, DrawDuration);
+                    _pluginInstance.ChatMessage(player, LangEntry.WireToolMonumentMismatch);
+                    return;
+                }
+
+                if (slot.type != session.WireType)
+                {
+                    Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.red, DrawDuration);
+                    _pluginInstance.ChatMessage(player, LangEntry.WireToolTypeMismatch, session.WireType, slot.type);
+                    return;
+                }
+
+                var sourceAdapter = session.IsSource ? session.Adapter : adapter;
+                var destinationAdapter = session.IsSource ? adapter : session.Adapter;
+
+                var points = session.Points.Select(adapter.Monument.InverseTransformPoint);
+                if (!session.IsSource)
+                {
+                    points = points.Reverse();
+                }
+
+                var connectionData = new IOConnectionData
+                {
+                    ConnectedToId = destinationAdapter.EntityData.Id,
+                    Slot = session.IsSource ? session.StartSlotIndex : slotIndex,
+                    ConnectedToSlot = session.IsSource ? slotIndex : session.StartSlotIndex,
+                    Points = points.ToArray(),
+                    Color = session.WireColor,
+                };
+
+                sourceAdapter.EntityData.AddIOConnection(connectionData);
+                _profileStore.Save(sourceAdapter.Controller.Profile);
+
+                (sourceAdapter.Controller as SingleEntityController).HandleChanges();
+                session.Reset();
+
+                Ddraw.Sphere(player, adapter.Transform.TransformPoint(slot.handlePosition), DrawSlotRadius, Color.green, DrawDuration);
+                SendEffect(player, WireToolPlugEffect);
+            }
+
+            private void MaybeClearWire(WireSession session)
+            {
+                var player = session.Player;
+                session.SecondaryPressedTime = float.MaxValue;
+
+                IOEntity ioEntity;
+                var adapter = GetLookIOAdapter(player, out ioEntity);
+                if (adapter == null)
+                    return;
+
+                int slotIndex;
+                bool isSourceSlot;
+                var slot = GetClosestIOSlot(ioEntity, player.eyes.HeadRay(), MinAngleDot, out slotIndex, out isSourceSlot, wantsOccupiedSlots: true);
+                if (slot == null)
+                    return;
+
+                SingleEntityAdapter sourceAdapter;
+                int sourceSlotIndex;
+
+                if (isSourceSlot)
+                {
+                    sourceAdapter = adapter;
+                    sourceSlotIndex = slotIndex;
+                }
+                else
+                {
+                    var sourceEntity = slot.connectedTo.Get();
+
+                    SingleEntityController sourceController;
+                    if (!_entityTracker.IsMonumentEntity(sourceEntity, out sourceAdapter, out sourceController))
+                        return;
+
+                    sourceSlotIndex = slot.connectedToSlot;
+                }
+
+                sourceAdapter.EntityData.RemoveIOConnection(sourceSlotIndex);
+                _profileStore.Save(sourceAdapter.Controller.Profile);
+                (sourceAdapter.Controller as SingleEntityController).HandleChanges();
+            }
+
+            private void ProcessPlayers()
+            {
+                for (var i = _playerSessions.Count - 1; i >= 0; i--)
+                {
+                    var session = _playerSessions[i];
+                    var player = session.Player;
+
+                    if (!CanPlayerUseTool(player))
+                    {
+                        DestroySession(session, i);
+                        continue;
+                    }
+
+                    if (session.Adapter != null && (session.Adapter == null || session.Adapter.IsDestroyed))
+                    {
+                        session.Reset();
+                    }
+
+                    var secondaryJustPressed = player.serverInput.WasJustPressed(BUTTON.FIRE_SECONDARY);
+                    var secondaryJustReleased = player.serverInput.WasJustReleased(BUTTON.FIRE_SECONDARY);
+                    var now = UnityEngine.Time.time;
+                    var secondaryPressedDuration = 0f;
+
+                    if (secondaryJustPressed)
+                    {
+                        session.SecondaryPressedTime = now;
+                    }
+                    else if (secondaryJustReleased)
+                    {
+                        session.SecondaryPressedTime = float.MaxValue;
+                    }
+                    else if (session.SecondaryPressedTime != float.MaxValue)
+                    {
+                        secondaryPressedDuration = now - session.SecondaryPressedTime;
+                    }
+
+                    DrawSessionState(session);
+
+                    if (session.IsOnInputCooldown())
+                        continue;
+
+                    if (player.serverInput.WasJustPressed(BUTTON.FIRE_PRIMARY))
+                    {
+                        session.LastInput = now;
+
+                        IOEntity ioEntity;
+                        var adapter = GetLookIOAdapter(player, out ioEntity);
+                        if (adapter != null)
+                        {
+                            if (session.Adapter == null)
+                            {
+                                MaybeStartWire(session, adapter);
+                                continue;
+                            }
+
+                            MaybeEndWire(session, adapter);
+                            continue;
+                        }
+
+                        if (session.Adapter != null)
+                        {
+                            if (session.WireType == IOType.Kinetic)
+                            {
+                                // Placing wires with kinetic slots will kick the player.
+                                continue;
+                            }
+
+                            Vector3 position;
+                            if (TryGetHitPosition(player, out position))
+                            {
+                                session.AddPoint(position);
+                                SendEffect(player, WireToolPlugEffect);
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if (session.Adapter != null && secondaryJustPressed)
+                    {
+                        // Remove the most recently placed wire.
+                        session.LastInput = now;
+                        session.RemoveLast();
+                    }
+
+                    if (session.Adapter == null
+                        && session.SecondaryPressedTime != float.MaxValue
+                        && secondaryPressedDuration >= HoldToClearDuration)
+                    {
+                        MaybeClearWire(session);
+                        continue;
+                    }
+                }
+
+                if (_playerSessions.Count == 0 && _timer != null && _timer.Destroyed)
+                {
+                    _timer.Destroy();
+                    _timer = null;
+                }
+            }
+        }
+
         private abstract class DictionaryKeyConverter<TKey, TValue> : JsonConverter
         {
             public virtual string KeyToString(TKey key) => key.ToString();
@@ -3628,6 +4381,233 @@ namespace Oxide.Plugins
             return false;
         }
 
+        private class MonumentHelper
+        {
+            private MonumentAddons _pluginInstance;
+            private Plugin _monumentFinder => _pluginInstance.MonumentFinder;
+            private Dictionary<DungeonGridInfo, MonumentInfo> _entranceToMonument = new Dictionary<DungeonGridInfo, MonumentInfo>();
+
+            public MonumentHelper(MonumentAddons pluginInstance)
+            {
+                _pluginInstance = pluginInstance;
+            }
+
+            public void OnServerInitialized()
+            {
+                foreach (var monumentInfo in TerrainMeta.Path.Monuments)
+                {
+                    if (monumentInfo.DungeonEntrance != null)
+                    {
+                        _entranceToMonument[monumentInfo.DungeonEntrance] = monumentInfo;
+                    }
+                }
+            }
+
+            public List<BaseMonument> FindMonumentsByAlias(string alias) =>
+                WrapFindMonumentResults(_monumentFinder.Call("API_FindByAlias", alias) as List<Dictionary<string, object>>);
+
+            public List<BaseMonument> FindMonumentsByShortName(string shortName) =>
+                WrapFindMonumentResults(_monumentFinder.Call("API_FindByShortName", shortName) as List<Dictionary<string, object>>);
+
+            public MonumentAdapter GetClosestMonumentAdapter(Vector3 position)
+            {
+                var dictResult = _monumentFinder.Call("API_GetClosest", position) as Dictionary<string, object>;
+                if (dictResult == null)
+                    return null;
+
+                return new MonumentAdapter(dictResult);
+            }
+
+            public bool IsMonumentUnique(string shortName)
+            {
+                var monuments = FindMonumentsByShortName(shortName);
+
+                if (monuments != null && monuments.Count > 1)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+
+            private List<BaseMonument> WrapFindMonumentResults(List<Dictionary<string, object>> dictList)
+            {
+                if (dictList == null)
+                    return null;
+
+                var monumentList = new List<BaseMonument>();
+                foreach (var dict in dictList)
+                    monumentList.Add(new MonumentAdapter(dict));
+
+                return monumentList;
+            }
+
+            public MonumentInfo GetMonumentFromTunnel(DungeonGridCell dungeonGridCell)
+            {
+                var entrance = TerrainMeta.Path.FindClosest(TerrainMeta.Path.DungeonGridEntrances, dungeonGridCell.transform.position);
+                if (entrance == null)
+                    return null;
+
+                return GetMonumentFromEntrance(entrance);
+            }
+
+            private MonumentInfo GetMonumentFromEntrance(DungeonGridInfo dungeonGridInfo)
+            {
+                MonumentInfo monumentInfo;
+                return _entranceToMonument.TryGetValue(dungeonGridInfo, out monumentInfo)
+                    ? monumentInfo
+                    : null;
+            }
+        }
+
+        private static class PhoneUtils
+        {
+            public const string Tunnel = "FTL";
+            public const string UnderwaterLab = "Underwater Lab";
+            public const string CargoShip = "Cargo Ship";
+
+            private static readonly Regex SplitCamelCaseRegex = new Regex("([a-z])([A-Z])", RegexOptions.Compiled);
+
+            private static readonly string[] PolymorphicMonumentVariants =
+                {
+                    "fishing_village_b",
+                    "fishing_village_c",
+                    "harbor_1",
+                    "harbor_2",
+                    "power_sub_big_1",
+                    "power_sub_big_2",
+                    "power_sub_small_1",
+                    "power_sub_small_2",
+                    "water_well_a",
+                    "water_well_b",
+                    "water_well_c",
+                    "water_well_d",
+                    "water_well_e",
+                    "entrance_bunker_a",
+                    "entrance_bunker_b",
+                    "entrance_bunker_c",
+                    "entrance_bunker_d",
+                };
+
+            public static void NameTelephone(Telephone telephone, BaseMonument monument, Vector3 position, MonumentHelper monumentHelper)
+            {
+                string phoneName = null;
+
+                var monumentInfo = monument.Object as MonumentInfo;
+                if (monumentInfo != null && !string.IsNullOrEmpty(monumentInfo.displayPhrase.translated))
+                {
+                    phoneName = monumentInfo.displayPhrase.translated;
+
+                    if (ShouldAppendCoordinate(monument.ShortName, monumentHelper))
+                        phoneName += $" {PhoneController.PositionToGridCoord(position)}";
+                }
+
+                var dungeonGridCell = monument.Object as DungeonGridCell;
+                if (dungeonGridCell != null && !string.IsNullOrEmpty(monument.Alias))
+                {
+                    phoneName = GetFTLPhoneName(monument.Alias, dungeonGridCell, monument, position, monumentHelper);
+                }
+
+                var dungeonBaseLink = monument.Object as DungeonBaseLink;
+                if (dungeonBaseLink != null)
+                {
+                    phoneName = GetUnderwaterLabPhoneName(dungeonBaseLink, position);
+                }
+
+                var dynamicMonument = monument as DynamicMonument;
+                if (dynamicMonument != null)
+                {
+                    phoneName = GetDynamicMonumentPhoneName(dynamicMonument, telephone);
+                }
+
+                telephone.Controller.PhoneName = !string.IsNullOrEmpty(phoneName)
+                    ? phoneName
+                    : $"{telephone.GetDisplayName()} {PhoneController.PositionToGridCoord(position)}";
+
+                TelephoneManager.RegisterTelephone(telephone.Controller);
+            }
+
+            private static string GetFTLCorridorPhoneName(string tunnelName, Vector3 position)
+            {
+                return $"{Tunnel} {tunnelName} {PhoneController.PositionToGridCoord(position)}";
+            }
+
+            private static string GetFTLPhoneName(string tunnelAlias, DungeonGridCell dungeonGridCell, BaseMonument monument, Vector3 position, MonumentHelper monumentHelper)
+            {
+                var tunnelName = SplitCamelCase(tunnelAlias);
+                var phoneName = GetFTLCorridorPhoneName(tunnelName, position);
+
+                if (monument.AliasOrShortName == "TrainStation")
+                {
+                    var attachedMonument = monumentHelper.GetMonumentFromTunnel(dungeonGridCell);
+                    if (attachedMonument != null && !attachedMonument.name.Contains("tunnel-entrance/entrance_bunker"))
+                    {
+                        phoneName = GetFTLTrainStationPhoneName(attachedMonument, tunnelName, position, monumentHelper);
+                    }
+                }
+
+                return phoneName;
+            }
+
+            private static string GetFTLTrainStationPhoneName(MonumentInfo attachedMonument, string tunnelName, Vector3 position, MonumentHelper monumentHelper)
+            {
+                var phoneName = string.IsNullOrEmpty(attachedMonument.displayPhrase.translated)
+                    ? $"{Tunnel} {tunnelName}"
+                    : $"{Tunnel} {attachedMonument.displayPhrase.translated} {tunnelName}";
+
+                var shortname = GetShortName(attachedMonument.name);
+
+                if (ShouldAppendCoordinate(shortname, monumentHelper))
+                    phoneName += $" {PhoneController.PositionToGridCoord(position)}";
+
+                return phoneName;
+            }
+
+            private static string GetUnderwaterLabPhoneName(DungeonBaseLink link, Vector3 position)
+            {
+                var floors = link.Dungeon.Floors;
+                var gridCoordinate = PhoneController.PositionToGridCoord(position);
+
+                for (int i = 0; i < floors.Count; i++)
+                {
+                    if (floors[i].Links.Contains(link))
+                    {
+                        var roomLevel = $"L{1 + i}";
+                        var roomType = link.Type.ToString();
+                        var roomNumber = 1 + floors[i].Links.IndexOf(link);
+                        var roomName = $"{roomLevel} {roomType} {roomNumber}";
+
+                        return $"{UnderwaterLab} {gridCoordinate} {roomName}";
+                    }
+                }
+
+                return $"{UnderwaterLab} {gridCoordinate}";
+            }
+
+            private static string GetDynamicMonumentPhoneName(DynamicMonument monument, Telephone phone)
+            {
+                if (monument.RootEntity is CargoShip)
+                {
+                    return $"{CargoShip} {monument.EntityId}";
+                }
+
+                return $"{phone.GetDisplayName()} {monument.EntityId}";
+            }
+
+            private static bool ShouldAppendCoordinate(string monumentShortName, MonumentHelper monumentHelper)
+            {
+                if (PolymorphicMonumentVariants.Contains(monumentShortName))
+                    return true;
+
+                return !monumentHelper.IsMonumentUnique(monumentShortName);
+            }
+
+            private static string SplitCamelCase(string camelCase)
+            {
+                return SplitCamelCaseRegex.Replace(camelCase, "$1 $2");
+            }
+        }
+
         #endregion
 
         #endregion
@@ -3658,6 +4638,12 @@ namespace Oxide.Plugins
 
             public abstract Vector3 ClosestPointOnBounds(Vector3 position);
             public abstract bool IsInBounds(Vector3 position);
+
+            public virtual bool IsSameAs(BaseMonument other)
+            {
+                return PrefabName == other.PrefabName
+                    && Position == other.Position;
+            }
         }
 
         private class MonumentAdapter : BaseMonument
@@ -3709,6 +4695,11 @@ namespace Oxide.Plugins
 
             public override bool IsInBounds(Vector3 position) =>
                 BoundingBox.Contains(position);
+
+            public override bool IsSameAs(BaseMonument other)
+            {
+                return RootEntity == (other as DynamicMonument)?.RootEntity;
+            }
         }
 
         #endregion
@@ -3997,6 +4988,17 @@ namespace Oxide.Plugins
                     PluginInstance.TrackEnd();
                 }
             }
+
+            public BaseAdapter FindAdapterForMonument(BaseMonument monument)
+            {
+                foreach (var adapter in Adapters)
+                {
+                    if (adapter.Monument.IsSameAs(monument))
+                        return adapter;
+                }
+
+                return null;
+            }
         }
 
         #endregion
@@ -4092,10 +5094,145 @@ namespace Oxide.Plugins
 
         private class SingleEntityAdapter : EntityAdapterBase
         {
+            private class IOEntityOverrideInfo
+            {
+                public Dictionary<int, Vector3> Inputs = new Dictionary<int, Vector3>();
+                public Dictionary<int, Vector3> Outputs = new Dictionary<int, Vector3>();
+            }
+
+            private static readonly Dictionary<string, IOEntityOverrideInfo> IOOverridesByEntity = new Dictionary<string, IOEntityOverrideInfo>
+            {
+                ["assets/prefabs/io/electric/switches/doormanipulator.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 0.9f, 0),
+                    },
+                },
+                ["assets/prefabs/io/electric/switches/simpleswitch/simpleswitch.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 0.78f, 0.03f),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 1.22f, 0.03f),
+                    },
+                },
+                ["assets/prefabs/io/electric/switches/timerswitch.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 0.795f, 0.03f),
+                        [1] = new Vector3(-0.15f, 1.04f, 0.03f),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 1.295f, 0.025f),
+                    },
+                },
+                ["assets/prefabs/io/electric/switches/orswitch.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(-0.035f, 0.82f, -0.125f),
+                        [1] = new Vector3(-0.035f, 0.82f, -0.175f),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [1] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [2] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [3] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [4] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [5] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [6] = new Vector3(-0.035f, 1.3f, -0.15f),
+                        [7] = new Vector3(-0.035f, 1.3f, -0.15f),
+                    },
+                },
+                ["assets/prefabs/io/electric/switches/cardreader.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(-0.014f, 1.18f, 0.03f),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(-0.014f, 1.55f, 0.03f),
+                    },
+                },
+                ["assets/prefabs/io/electric/switches/pressbutton/pressbutton.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 1.1f, 0.025f),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 1.38f, 0.025f),
+                    },
+                },
+                ["assets/prefabs/io/kinetic/wheelswitch.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(-0.1f, 0, 0),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0.1f, 0, 0),
+                    },
+                },
+                ["assets/content/structures/interactive_garage_door/sliding_blast_door.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0.1f, 0, 0),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(-0.1f, 0, 0),
+                    },
+                },
+                ["assets/prefabs/io/electric/switches/fusebox/fusebox.prefab"] = new IOEntityOverrideInfo
+                {
+                    Inputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 1.06f, 0.06f),
+                    },
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 1.565f, 0.06f),
+                        [1] = new Vector3(0, 1.565f, 0.06f),
+                        [2] = new Vector3(0, 1.565f, 0.06f),
+                        [3] = new Vector3(0, 1.565f, 0.06f),
+                        [4] = new Vector3(0, 1.565f, 0.06f),
+                        [5] = new Vector3(0, 1.565f, 0.06f),
+                        [6] = new Vector3(0, 1.565f, 0.06f),
+                        [7] = new Vector3(0, 1.565f, 0.06f),
+                    },
+                },
+                ["assets/prefabs/io/electric/generators/generator.static.prefab"] = new IOEntityOverrideInfo
+                {
+                    Outputs = new Dictionary<int, Vector3>
+                    {
+                        [0] = new Vector3(0, 0.75f, -0.5f),
+                        [1] = new Vector3(0, 0.75f, -0.3f),
+                        [2] = new Vector3(0, 0.75f, -0.1f),
+                        [3] = new Vector3(0, 0.75f, 0.1f),
+                        [4] = new Vector3(0, 0.75f, 0.3f),
+                        [5] = new Vector3(0, 0.75f, 0.5f),
+                    },
+                },
+            };
+
             public BaseEntity Entity { get; private set; }
             public override bool IsDestroyed => Entity == null || Entity.IsDestroyed;
-            public override Vector3 Position => _transform.position;
-            public override Quaternion Rotation => _transform.rotation;
+            public override Vector3 Position => Transform.position;
+            public override Quaternion Rotation => Transform.rotation;
+
+            public Transform Transform { get; private set; }
 
             private BuildingGrade.Enum IntendedBuildingGrade
             {
@@ -4109,8 +5246,6 @@ namespace Oxide.Plugins
                         : buildingBlock.blockDefinition.defaultGrade.gradeBase.type;
                 }
             }
-
-            private Transform _transform;
 
             public SingleEntityAdapter(EntityControllerBase controller, EntityData entityData, BaseMonument monument) : base(controller, monument, entityData) {}
 
@@ -4126,20 +5261,17 @@ namespace Oxide.Plugins
                     else
                     {
                         Entity = existingEntity;
-                        _transform = Entity.transform;
+                        Transform = Entity.transform;
 
                         PreEntitySpawn();
                         PostEntitySpawn();
                         HandleChanges();
                         MonumentEntityComponent.AddToEntity(PluginInstance._entityTracker, Entity, this, Monument);
 
-                        if (_pluginConfig.StoreCustomVendingSetupSettingsInProfiles)
+                        var vendingMachine = Entity as NPCVendingMachine;
+                        if (vendingMachine != null)
                         {
-                            var vendingMachine = Entity as NPCVendingMachine;
-                            if (vendingMachine != null)
-                            {
-                                PluginInstance.RefreshVendingProfile(vendingMachine);
-                            }
+                            PluginInstance.RefreshVendingProfile(vendingMachine);
                         }
 
                         var mountable = Entity as BaseMountable;
@@ -4169,7 +5301,7 @@ namespace Oxide.Plugins
                 }
 
                 Entity = CreateEntity(EntityData.PrefabName, IntendedPosition, IntendedRotation);
-                _transform = Entity.transform;
+                Transform = Entity.transform;
 
                 PreEntitySpawn();
                 Entity.Spawn();
@@ -4298,6 +5430,102 @@ namespace Oxide.Plugins
                 UpdateSkin();
                 UpdateScale();
                 UpdateBuildingGrade();
+                UpdateIOConnections();
+            }
+
+            public void UpdateIOConnections()
+            {
+                var ioEntityData = EntityData.IOEntityData;
+                if (ioEntityData == null)
+                    return;
+
+                var ioEntity = Entity as IOEntity;
+                if (ioEntity == null)
+                    return;
+
+                var hasChanged = false;
+
+                for (var outputSlotIndex = 0; outputSlotIndex < ioEntity.outputs.Length; outputSlotIndex++)
+                {
+                    var sourceSlot = ioEntity.outputs[outputSlotIndex];
+                    var destinationEntity = sourceSlot.connectedTo.Get();
+                    var destinationSlot = destinationEntity?.inputs.ElementAtOrDefault(sourceSlot.connectedToSlot);
+
+                    var connectionData = ioEntityData.FindConnection(outputSlotIndex);
+                    if (connectionData != null)
+                    {
+                        var intendedDestinationEntity = Controller.ProfileController.FindEntity<IOEntity>(connectionData.ConnectedToId, Monument);
+                        var intendedDestinationSlot = intendedDestinationEntity?.inputs.ElementAtOrDefault(connectionData.ConnectedToSlot);
+
+                        if (destinationSlot != intendedDestinationSlot)
+                        {
+                            // Existing destination entity or slot is incorrect.
+                            if (destinationSlot != null)
+                            {
+                                destinationSlot.Clear();
+                                destinationEntity.MarkDirtyForceUpdateOutputs();
+                                destinationEntity.SendNetworkUpdate();
+                            }
+
+                            destinationEntity = intendedDestinationEntity;
+                            destinationSlot = intendedDestinationSlot;
+
+                            sourceSlot.Clear();
+                            hasChanged = true;
+                        }
+
+                        if (destinationEntity == null)
+                        {
+                            // The destination entity cannot be found. Maybe it was destroyed.
+                            continue;
+                        }
+
+                        if (destinationSlot == null)
+                        {
+                            // The destination slot cannot be found. Maybe the index was out of range (bad data).
+                            continue;
+                        }
+
+                        SetupSlot(sourceSlot, destinationEntity, connectionData.ConnectedToSlot, connectionData.Color);
+
+                        if (sourceSlot.type != IOType.Kinetic && destinationSlot.type != IOType.Kinetic)
+                        {
+                            var numPoints = connectionData.Points?.Length ?? 0;
+
+                            sourceSlot.linePoints = new Vector3[numPoints + 2];
+                            sourceSlot.linePoints[0] = sourceSlot.handlePosition;
+                            sourceSlot.linePoints[numPoints + 1] = Transform.InverseTransformPoint(destinationEntity.transform.TransformPoint(destinationSlot.handlePosition));
+
+                            for (var pointIndex = 0; pointIndex < numPoints; pointIndex++)
+                            {
+                                sourceSlot.linePoints[pointIndex + 1] = Transform.InverseTransformPoint(Monument.TransformPoint(connectionData.Points[pointIndex]));
+                            }
+                        }
+
+                        SetupSlot(destinationSlot, ioEntity, connectionData.Slot, connectionData.Color);
+                        destinationEntity.SendNetworkUpdate();
+
+                        hasChanged = true;
+                        continue;
+                    }
+                    else if (destinationSlot != null)
+                    {
+                        // No connection data saved, so clear existing connection.
+                        destinationSlot.Clear();
+                        destinationEntity.MarkDirtyForceUpdateOutputs();
+                        destinationEntity.SendNetworkUpdate();
+
+                        sourceSlot.Clear();
+                        hasChanged = true;
+                    }
+                }
+
+                if (hasChanged)
+                {
+                    ioEntity.MarkDirtyForceUpdateOutputs();
+                    ioEntity.SendNetworkUpdate();
+                    ioEntity.SendChangedToRoot(forceUpdate: true);
+                }
             }
 
             protected virtual void PreEntitySpawn()
@@ -4325,6 +5553,7 @@ namespace Oxide.Plugins
                 {
                     ioEntity.SetFlag(BaseEntity.Flags.On, true);
                     ioEntity.SetFlag(IOEntity.Flag_HasPower, true);
+                    UpdateIOEntitySlots(ioEntity);
                 }
             }
 
@@ -4377,6 +5606,89 @@ namespace Oxide.Plugins
                         EntityUtils.ConnectNearbyVehicleSpawner(vehicleVendor);
                         PluginInstance.TrackEnd();
                     }, 2);
+                }
+
+                var candle = Entity as Candle;
+                if (candle != null)
+                {
+                    candle.SetFlag(BaseEntity.Flags.On, true);
+                    candle.CancelInvoke(candle.Burn);
+
+                    // Disallow extinguishing.
+                    candle.SetFlag(BaseEntity.Flags.Busy, true);
+                }
+
+                var fogMachine = Entity as FogMachine;
+                if (fogMachine != null)
+                {
+                    fogMachine.SetFlag(BaseEntity.Flags.On, true);
+                    fogMachine.InvokeRepeating(() =>
+                    {
+                        fogMachine.SetFlag(FogMachine.Emitting, true);
+                        fogMachine.Invoke(fogMachine.EnableFogField, 1f);
+                        fogMachine.Invoke(fogMachine.DisableNozzle, fogMachine.nozzleBlastDuration);
+                        fogMachine.Invoke(fogMachine.FinishFogging, fogMachine.fogLength);
+                    },
+                    UnityEngine.Random.Range(0f, 5f),
+                    fogMachine.fogLength - 1);
+
+                    // Disallow interaction.
+                    fogMachine.SetFlag(BaseEntity.Flags.Busy, true);
+                }
+
+                var oven = Entity as BaseOven;
+                if (oven != null)
+                {
+                    // Lanterns
+                    if (oven is BaseFuelLightSource)
+                    {
+                        oven.SetFlag(BaseEntity.Flags.On, true);
+                        oven.SetFlag(BaseEntity.Flags.Busy, true);
+                    }
+
+                    // jackolantern.angry or jackolantern.happy
+                    else if (oven.prefabID == 1889323056 || oven.prefabID == 630866573)
+                    {
+                        oven.SetFlag(BaseEntity.Flags.On, true);
+                        oven.SetFlag(BaseEntity.Flags.Busy, true);
+                    }
+                }
+
+                var spooker = Entity as SpookySpeaker;
+                if (spooker != null)
+                {
+                    spooker.SetFlag(BaseEntity.Flags.On, true);
+                    spooker.InvokeRandomized(
+                        spooker.SendPlaySound,
+                        spooker.soundSpacing,
+                        spooker.soundSpacing,
+                        spooker.soundSpacingRand);
+
+                    spooker.SetFlag(BaseEntity.Flags.Busy, true);
+                }
+
+                var doorManipulator = Entity as DoorManipulator;
+                if (doorManipulator != null && doorManipulator.targetDoor == null)
+                {
+                    doorManipulator.Invoke(() =>
+                    {
+                        PluginInstance.TrackStart();
+                        EntityUtils.ConnectNearbyDoor(doorManipulator);
+                        PluginInstance.TrackEnd();
+                    }, 1);
+                }
+
+                var spray = Entity as SprayCanSpray;
+                if (spray != null)
+                {
+                    spray.CancelInvoke(spray.RainCheck);
+                    spray.splashThreshold = int.MaxValue;
+                }
+
+                var telephone = Entity as Telephone;
+                if (telephone != null && telephone.prefabID == 1009655496)
+                {
+                    PhoneUtils.NameTelephone(telephone, Monument, Position, PluginInstance._monumentHelper);
                 }
 
                 if (EntityData.Scale != 1 || Entity.GetParentEntity() is SphereEntity)
@@ -4469,6 +5781,39 @@ namespace Oxide.Plugins
                 buildingBlock.SetHealthToMax();
                 buildingBlock.SendNetworkUpdate();
                 buildingBlock.baseProtection = PluginInstance._immortalProtection;
+            }
+
+            private void UpdateIOEntitySlots(IOEntity ioEntity)
+            {
+                IOEntityOverrideInfo overrideInfo;
+                if (!IOOverridesByEntity.TryGetValue(ioEntity.PrefabName, out overrideInfo))
+                    return;
+
+                for (var i = 0; i < ioEntity.inputs.Length; i++)
+                {
+                    Vector3 overridePosition;
+                    if (overrideInfo.Inputs.TryGetValue(i, out overridePosition))
+                    {
+                        ioEntity.inputs[i].handlePosition = overridePosition;
+                    }
+                }
+
+                for (var i = 0; i < ioEntity.outputs.Length; i++)
+                {
+                    Vector3 overridePosition;
+                    if (overrideInfo.Outputs.TryGetValue(i, out overridePosition))
+                    {
+                        ioEntity.outputs[i].handlePosition = overridePosition;
+                    }
+                }
+            }
+
+            private void SetupSlot(IOSlot slot, IOEntity otherEntity, int otherSlotIndex, WireColour color)
+            {
+                slot.connectedTo.Set(otherEntity);
+                slot.connectedToSlot = otherSlotIndex;
+                slot.wireColour = color;
+                slot.connectedTo.Init();
             }
         }
 
@@ -4866,6 +6211,15 @@ namespace Oxide.Plugins
             public abstract bool InterestedInAdapter(BaseAdapter adapter);
             public abstract void OnAdapterSpawned(BaseAdapter adapter);
             public abstract void OnAdapterKilled(BaseAdapter adapter);
+
+            protected bool IsEntityAdapter<T>(BaseAdapter adapter)
+            {
+                var entityData = adapter.Data as EntityData;
+                if (entityData == null)
+                    return false;
+
+                return FindBaseEntityForPrefab(entityData.PrefabName) is T;
+            }
         }
 
         private abstract class DynamicHookListener : AdapterListenerBase
@@ -4934,11 +6288,7 @@ namespace Oxide.Plugins
 
             public override bool InterestedInAdapter(BaseAdapter adapter)
             {
-                var entityData = adapter.Data as EntityData;
-                if (entityData == null)
-                    return false;
-
-                return FindBaseEntityForPrefab(entityData.PrefabName) is ISignage;
+                return IsEntityAdapter<ISignage>(adapter);
             }
         }
 
@@ -4954,11 +6304,23 @@ namespace Oxide.Plugins
 
             public override bool InterestedInAdapter(BaseAdapter adapter)
             {
-                var entityData = adapter.Data as EntityData;
-                if (entityData == null)
-                    return false;
+                return IsEntityAdapter<BuildingBlock>(adapter);
+            }
+        }
 
-                return FindBaseEntityForPrefab(entityData.PrefabName) is BuildingBlock;
+        private class SprayDecalListener : DynamicHookListener
+        {
+            public SprayDecalListener(MonumentAddons pluginInstance) : base(pluginInstance)
+            {
+                _dynamicHookNames = new string[]
+                {
+                    nameof(OnSprayRemove),
+                };
+            }
+
+            public override bool InterestedInAdapter(BaseAdapter adapter)
+            {
+                return IsEntityAdapter<SprayCanSpray>(adapter);
             }
         }
 
@@ -4972,6 +6334,7 @@ namespace Oxide.Plugins
                 {
                     new SignEntityListener(pluginInstance),
                     new BuildingBlockEntityListener(pluginInstance),
+                    new SprayDecalListener(pluginInstance),
                 };
             }
 
@@ -5024,7 +6387,7 @@ namespace Oxide.Plugins
             private Vector3 _originalPosition;
             private Transform _transform;
 
-            private void Awake()
+            public void Awake()
             {
                 _transform = transform;
                 _originalPosition = _transform.position;
@@ -5032,7 +6395,7 @@ namespace Oxide.Plugins
                 InvokeRandomized(CheckPositionTracked, 10, 10, 1);
             }
 
-            private void CheckPositionTracked()
+            public void CheckPositionTracked()
             {
                 _pluginInstance.TrackStart();
                 CheckPosition();
@@ -5064,13 +6427,26 @@ namespace Oxide.Plugins
 
         private class CustomSpawnPoint : BaseSpawnPoint
         {
+            private const int TrainCarLayerMask = Rust.Layers.Mask.AI
+                | Rust.Layers.Mask.Vehicle_World
+                | Rust.Layers.Mask.Player_Server
+                | Rust.Layers.Mask.Construction;
+
             // When CheckSpace is enabled, override the layer mask for certain entity prefabs.
             private static readonly Dictionary<string, int> CustomBoundsCheckMask = new Dictionary<string, int>
             {
-                ["assets/content/vehicles/workcart/workcart.entity.prefab"] = Rust.Layers.Mask.AI
-                    | Rust.Layers.Mask.Vehicle_World
-                    | Rust.Layers.Mask.Player_Server
-                    | Rust.Layers.Mask.Construction,
+                ["assets/content/vehicles/trains/locomotive/locomotive.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/sedan_a/sedanrail.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/workcart/workcart.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/workcart/workcart_aboveground.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/workcart/workcart_aboveground2.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/wagons/trainwagona.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/wagons/trainwagonb.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/wagons/trainwagonc.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/wagons/trainwagonunloadablefuel.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/wagons/trainwagonunloadableloot.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/wagons/trainwagonunloadable.entity.prefab"] = TrainCarLayerMask,
+                ["assets/content/vehicles/trains/caboose/traincaboose.entity.prefab"] = TrainCarLayerMask,
             };
 
             public SpawnPointAdapter Adapter { get; private set; }
@@ -5134,6 +6510,13 @@ namespace Oxide.Plugins
                 {
                     SpawnedVehicleComponent.AddToVehicle(Adapter.PluginInstance, instance.gameObject);
                     entity.Invoke(() => DisableVehicleDecay(entity), 5);
+                }
+
+                var hackableCrate = entity as HackableLockedCrate;
+                if ((object)hackableCrate != null && hackableCrate.shouldDecay)
+                {
+                    hackableCrate.shouldDecay = false;
+                    hackableCrate.CancelInvoke(hackableCrate.DelayedDestroy);
                 }
             }
 
@@ -5256,6 +6639,36 @@ namespace Oxide.Plugins
                 {
                     workcart.CancelInvoke(workcart.DecayTick);
                     return;
+                }
+            }
+
+            public void MoveSpawnedInstances()
+            {
+                for (var i = _instances.Count - 1; i >= 0; i--)
+                {
+                    var entity = _instances[i].GetComponent<BaseEntity>();
+                    if (entity != null && !entity.IsDestroyed)
+                    {
+                        Vector3 position;
+                        Quaternion rotation;
+
+                        Adapter.SpawnPoint.GetLocation(out position, out rotation);
+
+                        if (position != entity.transform.position || rotation != entity.transform.rotation)
+                        {
+                            if (IsVehicle(entity))
+                            {
+                                var spawnedVehicleComponent = entity.GetComponent<SpawnedVehicleComponent>();
+                                if (spawnedVehicleComponent != null)
+                                    spawnedVehicleComponent.CancelInvoke(spawnedVehicleComponent.CheckPositionTracked);
+
+                                Adapter.PluginInstance.NextTick(() => spawnedVehicleComponent.Awake());
+                            }
+
+                            entity.transform.SetPositionAndRotation(position, rotation);
+                            BroadcastEntityTransformChange(entity);
+                        }
+                    }
                 }
             }
         }
@@ -5407,6 +6820,16 @@ namespace Oxide.Plugins
             {
                 SpawnPoint.KillSpawnedInstances(prefabName);
             }
+
+            public void UpdatePosition()
+            {
+                if (!IsAtIntendedPosition)
+                {
+                    _transform.SetPositionAndRotation(IntendedPosition, IntendedRotation);
+                    SpawnPoint.MoveSpawnedInstances();
+                }
+
+            }
         }
 
         private class SpawnGroupAdapter : BaseAdapter
@@ -5550,11 +6973,21 @@ namespace Oxide.Plugins
                 }
             }
 
+            private void UpdateSpawnPointPositions()
+            {
+                foreach (var adapter in Adapters)
+                {
+                    if (!adapter.IsAtIntendedPosition)
+                        adapter.UpdatePosition();
+                }
+            }
+
             public void UpdateSpawnGroup()
             {
                 UpdateProperties();
                 UpdatePrefabEntries();
                 UpdateSpawnPointReferences();
+                UpdateSpawnPointPositions();
             }
 
             public void SpawnTick()
@@ -6791,6 +8224,52 @@ namespace Oxide.Plugins
                 StartCoroutine(ClearRoutine());
             }
 
+            public BaseController FindControllerById(Guid guid)
+            {
+                foreach (var entry in _controllersByData)
+                {
+                    if (entry.Key.Id == guid)
+                        return entry.Value;
+                }
+
+                return null;
+            }
+
+            public BaseAdapter FindAdapter(Guid guid, BaseMonument monument)
+            {
+                return FindControllerById(guid)?.FindAdapterForMonument(monument);
+            }
+
+            public T FindEntity<T>(Guid guid, BaseMonument monument) where T : BaseEntity
+            {
+                return _pluginConfig.EnableEntitySaving
+                    ? _profileStateData.FindEntity(Profile.Name, monument, guid) as T
+                    : (FindAdapter(guid, monument) as SingleEntityAdapter)?.Entity as T;
+            }
+
+            public void SetupConnections()
+            {
+                foreach (var entry in _controllersByData)
+                {
+                    var data = entry.Key;
+                    var controller = entry.Value;
+
+                    var entityData = data as EntityData;
+                    if (entityData == null || entityData.IOEntityData == null)
+                        continue;
+
+                    var singleEntityController = controller as SingleEntityController;
+                    if (singleEntityController == null)
+                        continue;
+
+                    foreach (var adapter in singleEntityController.Adapters)
+                    {
+                        var singleEntityAdapter = adapter as SingleEntityAdapter;
+                        singleEntityAdapter.UpdateIOConnections();
+                    }
+                }
+            }
+
             private void Interrupt()
             {
                 _coroutineManager.StopAll();
@@ -6893,6 +8372,8 @@ namespace Oxide.Plugins
                 }
 
                 ProfileStatus = ProfileStatus.Loaded;
+
+                SetupConnections();
             }
 
             private IEnumerator UnloadRoutine(IEnumerator cleanupRoutine)
@@ -7284,6 +8765,42 @@ namespace Oxide.Plugins
             public bool Raw;
         }
 
+        private class IOConnectionData
+        {
+            [JsonProperty("ConnectedToId")]
+            public Guid ConnectedToId;
+
+            [JsonProperty("Slot")]
+            public int Slot;
+
+            [JsonProperty("ConnectedToSlot")]
+            public int ConnectedToSlot;
+
+            [JsonProperty("Points")]
+            public Vector3[] Points;
+
+            [JsonProperty("Color", DefaultValueHandling = DefaultValueHandling.Ignore)]
+            [JsonConverter(typeof(StringEnumConverter))]
+            public WireColour Color;
+        }
+
+        private class IOEntityData
+        {
+            [JsonProperty("Outputs")]
+            public List<IOConnectionData> Outputs = new List<IOConnectionData>();
+
+            public IOConnectionData FindConnection(int slot)
+            {
+                foreach (var connectionData in Outputs)
+                {
+                    if (connectionData.Slot == slot)
+                        return connectionData;
+                }
+
+                return null;
+            }
+        }
+
         private class EntityData : BaseTransformData
         {
             [JsonProperty("PrefabName", Order = -5)]
@@ -7307,6 +8824,35 @@ namespace Oxide.Plugins
 
             [JsonProperty("VendingProfile", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public object VendingProfile;
+
+            [JsonProperty("IOEntity", DefaultValueHandling = DefaultValueHandling.Ignore)]
+            public IOEntityData IOEntityData;
+
+            public void RemoveIOConnection(int slot)
+            {
+                if (IOEntityData == null)
+                    return;
+
+                for (var i = IOEntityData.Outputs.Count - 1; i >= 0; i--)
+                {
+                    if (IOEntityData.Outputs[i].Slot == slot)
+                    {
+                        IOEntityData.Outputs.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+
+            public void AddIOConnection(IOConnectionData connectionData)
+            {
+                if (IOEntityData == null)
+                {
+                    IOEntityData = new IOEntityData();
+                }
+
+                RemoveIOConnection(connectionData.Slot);
+                IOEntityData.Outputs.Add(connectionData);
+            }
         }
 
         #endregion
@@ -7718,11 +9264,34 @@ namespace Oxide.Plugins
 
         private static class ProfileDataMigration<T> where T : Profile
         {
+            private static readonly Dictionary<string, string> _prefabCorrections = new Dictionary<string, string>
+            {
+                ["assets/content/vehicles/locomotive/locomotive.entity.prefab"] = "assets/content/vehicles/trains/locomotive/locomotive.entity.prefab",
+                ["assets/content/vehicles/workcart/workcart.entity.prefab"] = "assets/content/vehicles/trains/workcart/workcart.entity.prefab",
+                ["assets/content/vehicles/workcart/workcart_aboveground.entity.prefab"] = "assets/content/vehicles/trains/workcart/workcart_aboveground.entity.prefab",
+                ["assets/content/vehicles/workcart/workcart_aboveground2.entity.prefab"] = "assets/content/vehicles/trains/workcart/workcart_aboveground2.entity.prefab",
+                ["assets/content/vehicles/train/trainwagona.entity.prefab"] = "assets/content/vehicles/trains/wagons/trainwagona.entity.prefab",
+                ["assets/content/vehicles/train/trainwagonb.entity.prefab"] = "assets/content/vehicles/trains/wagons/trainwagonb.entity.prefab",
+                ["assets/content/vehicles/train/trainwagonc.entity.prefab"] = "assets/content/vehicles/trains/wagons/trainwagonc.entity.prefab",
+                ["assets/content/vehicles/train/trainwagonunloadablefuel.entity.prefab"] = "assets/content/vehicles/trains/wagons/trainwagonunloadablefuel.entity.prefab",
+                ["assets/content/vehicles/train/trainwagonunloadableloot.entity.prefab"] = "assets/content/vehicles/trains/wagons/trainwagonunloadableloot.entity.prefab",
+                ["assets/content/vehicles/train/trainwagonunloadable.entity.prefab"] = "assets/content/vehicles/trains/wagons/trainwagonunloadable.entity.prefab",
+            };
+
+            private static string GetPrefabCorrectionIfExists(string prefabName)
+            {
+                string correctedPrefabName;
+                return _prefabCorrections.TryGetValue(prefabName, out correctedPrefabName)
+                    ? correctedPrefabName
+                    : prefabName;
+            }
+
             public static bool MigrateToLatest(T data)
             {
                 // Using single | to avoid short-circuiting.
                 return MigrateV0ToV1(data)
-                    | MigrateV1ToV2(data);
+                    | MigrateV1ToV2(data)
+                    | MigrateIncorrectPrefabs(data);
             }
 
             public static bool MigrateV0ToV1(T data)
@@ -7782,6 +9351,39 @@ namespace Oxide.Plugins
                     }
 
                     data.DeprecatedMonumentMap = null;
+                }
+
+                return contentChanged;
+            }
+
+            public static bool MigrateIncorrectPrefabs(T data)
+            {
+                var contentChanged = false;
+
+                foreach (var monumentData in data.MonumentDataMap.Values)
+                {
+                    foreach (var entityData in monumentData.Entities)
+                    {
+                        var correctedPrefabName = GetPrefabCorrectionIfExists(entityData.PrefabName);
+                        if (correctedPrefabName != entityData.PrefabName)
+                        {
+                            entityData.PrefabName = correctedPrefabName;
+                            contentChanged = true;
+                        }
+                    }
+
+                    foreach (var spawnGroupData in monumentData.SpawnGroups)
+                    {
+                        foreach (var prefabData in spawnGroupData.Prefabs)
+                        {
+                            var correctedPrefabName = GetPrefabCorrectionIfExists(prefabData.PrefabName);
+                            if (correctedPrefabName != prefabData.PrefabName)
+                            {
+                                prefabData.PrefabName = correctedPrefabName;
+                                contentChanged = true;
+                            }
+                        }
+                    }
                 }
 
                 return contentChanged;
@@ -7895,7 +9497,8 @@ namespace Oxide.Plugins
 
                 var originalSchemaVersion = profile.SchemaVersion;
 
-                if (ProfileDataMigration<Profile>.MigrateToLatest(profile))
+                var migrated = ProfileDataMigration<Profile>.MigrateToLatest(profile);
+                if (migrated)
                 {
                     Logger.Warning($"Profile {profile.Name} has been automatically migrated.");
                 }
@@ -7912,7 +9515,7 @@ namespace Oxide.Plugins
                     }
                 }
 
-                if (profile.SchemaVersion != originalSchemaVersion)
+                if (migrated)
                 {
                     Save(profile.Name, profile);
                 }
@@ -8665,6 +10268,10 @@ namespace Oxide.Plugins
             [JsonProperty("DebugDisplayDistance")]
             public float DebugDisplayDistance = 150;
 
+            [JsonProperty("EnableDynamicMonuments", DefaultValueHandling = DefaultValueHandling.Ignore)]
+            [DefaultValue(true)]
+            public bool EnableDynamicMonuments = true;
+
             [JsonProperty("PersistEntitiesAfterUnload")]
             public bool EnableEntitySaving = false;
 
@@ -8673,6 +10280,7 @@ namespace Oxide.Plugins
             {
                 ["arcade.machine.chippy"] = "assets/bundled/prefabs/static/chippyarcademachine.static.prefab",
                 ["autoturret"] = "assets/content/props/sentry_scientists/sentry.bandit.static.prefab",
+                ["bbq"] = "assets/bundled/prefabs/static/bbq.static.prefab",
                 ["boombox"] = "assets/prefabs/voiceaudio/boombox/boombox.static.prefab",
                 ["box.repair.bench"] = "assets/bundled/prefabs/static/repairbench_static.prefab",
                 ["cctv.camera"] = "assets/prefabs/deployable/cctvcamera/cctv.static.prefab",
@@ -8684,15 +10292,13 @@ namespace Oxide.Plugins
                 ["modularcarlift"] = "assets/bundled/prefabs/static/modularcarlift.static.prefab",
                 ["research.table"] = "assets/bundled/prefabs/static/researchtable_static.prefab",
                 ["samsite"] = "assets/prefabs/npc/sam_site_turret/sam_static.prefab",
+                ["small.oil.refinery"] = "assets/bundled/prefabs/static/small_refinery_static.prefab",
                 ["telephone"] = "assets/bundled/prefabs/autospawn/phonebooth/phonebooth.static.prefab",
                 ["vending.machine"] = "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
                 ["wall.frame.shopfront.metal"] = "assets/bundled/prefabs/static/wall.frame.shopfront.metal.static.prefab",
                 ["workbench1"] = "assets/bundled/prefabs/static/workbench1.static.prefab",
                 ["workbench2"] = "assets/bundled/prefabs/static/workbench2.static.prefab",
             };
-
-            [JsonProperty("StoreCustomVendingSetupSettingsInProfiles")]
-            public bool StoreCustomVendingSetupSettingsInProfiles;
         }
 
         private Configuration GetDefaultConfig() => new Configuration();
@@ -8999,6 +10605,14 @@ namespace Oxide.Plugins
             public static readonly LangEntry ProfileHelpClear = new LangEntry("Profile.Help.Clear2", "<color=#fd4>maprofile clear <name></color> - Clear a profile");
             public static readonly LangEntry ProfileHelpMoveTo = new LangEntry("Profile.Help.MoveTo2", "<color=#fd4>maprofile moveto <name></color> - Move an entity to a profile");
             public static readonly LangEntry ProfileHelpInstall = new LangEntry("Profile.Help.Install", "<color=#fd4>maprofile install <url></color> - Install a profile from a URL");
+
+            public static readonly LangEntry WireToolInvalidColor = new LangEntry("WireTool.Error.InvalidColor", "Invalid wire color: <color=#fd4>{0}</color>.");
+            public static readonly LangEntry WireToolNotEquipped = new LangEntry("WireTool.Error.NotEquipped", "Error: No Wire Tool or Hose Tool equipped.");
+            public static readonly LangEntry WireToolActivated = new LangEntry("WireTool.Activated", "Monument Addons Wire Tool activated with color <color=#fd4>{0}</color>.");
+            public static readonly LangEntry WireToolDeactivated = new LangEntry("WireTool.Deactivated", "Monument Addons Wire Tool deactivated.");
+            public static readonly LangEntry WireToolTypeMismatch = new LangEntry("WireTool.TypeMismatch", "Error: You can only connect slots of the same type. Looking for <color=#fd4>{0}</color>, but found <color=#fd4>{1}</color>.");
+            public static readonly LangEntry WireToolProfileMismatch = new LangEntry("WireTool.ProfileMismatch", "Error: You can only connect entities in the same profile. Looking for <color=#fd4>{0}</color>, but found <color=#fd4>{1}</color>.");
+            public static readonly LangEntry WireToolMonumentMismatch = new LangEntry("WireTool.MonumentMismatch", "Error: You can only connect entities at the same monument.");
 
             public static readonly LangEntry HelpHeader = new LangEntry("Help.Header", "<size=18>Monument Addons Help</size>");
             public static readonly LangEntry HelpSpawn = new LangEntry("Help.Spawn", "<color=#fd4>maspawn <entity></color> - Spawn an entity");
