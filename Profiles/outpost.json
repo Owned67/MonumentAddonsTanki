@@ -32,7 +32,8 @@
             "x": 0.0,
             "y": 78.69951,
             "z": 0.0
-          }
+          },
+          "Skin": 2024586973
         },
         {
           "Id": "f4402c96-475d-4f21-a715-cc57e7b8a7c5",
@@ -46,7 +47,8 @@
             "x": 0.0,
             "y": 179.775513,
             "z": 0.0
-          }
+          },
+          "Skin": 2024586973
         },
         {
           "Id": "9cfbad6e-879d-484f-b20b-ea976cb07272",
@@ -60,7 +62,8 @@
             "x": 0.0,
             "y": 222.262741,
             "z": 0.0
-          }
+          },
+          "Skin": 2024586973
         },
         {
           "Id": "80113d52-8fb3-473b-973e-10cde4ed6946",
@@ -74,6 +77,104 @@
             "x": 0.0,
             "y": 180.003326,
             "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "RESOURCES X5",
+            "Monument": "assets/bundled/prefabs/autospawn/monument/medium/compound.prefab",
+            "Position": {
+              "x": -31.92377,
+              "y": 0.256015778,
+              "z": 39.82211
+            },
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "stones",
+                  "Amount": 5000
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 250
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "wood",
+                  "Amount": 5000
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 100
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "metal.fragments",
+                  "Amount": 1250
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 125
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "stones",
+                  "Amount": 750
+                },
+                "CurrencyItem": {
+                  "ShortName": "wood",
+                  "Amount": 2500
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "wood",
+                  "Amount": 2500
+                },
+                "CurrencyItem": {
+                  "ShortName": "stones",
+                  "Amount": 750
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "lowgradefuel",
+                  "Amount": 100
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 500
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "diesel_barrel",
+                  "Amount": 5
+                },
+                "CurrencyItem": {
+                  "ShortName": "lowgradefuel",
+                  "Amount": 1500
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "lowgradefuel",
+                  "Amount": 1500
+                },
+                "CurrencyItem": {
+                  "ShortName": "diesel_barrel",
+                  "Amount": 5
+                }
+              }
+            ]
           }
         },
         {
@@ -88,7 +189,127 @@
             "x": 0.0,
             "y": 89.6684952,
             "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "black market Weapons",
+            "Monument": "assets/bundled/prefabs/autospawn/monument/medium/compound.prefab",
+            "Position": {
+              "x": 8.296265,
+              "y": 0.0912208557,
+              "z": -33.2775269
+            },
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "rifle.lr300",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.rifle"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1500
+                },
+                "RefillDelay": 3
+              },
+              {
+                "SellItem": {
+                  "ShortName": "pistol.m92",
+                  "Amount": 1,
+                  "Ammo": 6,
+                  "AmmoType": "ammo.pistol"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 750
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "shotgun.spas12",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.shotgun"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 750
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "rifle.m39",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.rifle"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "grenade.f1",
+                  "Amount": 5
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 35
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "weapon.mod.8x.scope",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "nightvisiongoggles",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 900
+                }
+              }
+            ]
           }
+        },
+        {
+          "Id": "53e044a0-374c-4d3a-8124-852f8c0b3bde",
+          "PrefabName": "assets/prefabs/deployable/chair/chair.deployed.prefab",
+          "Position": {
+            "x": -35.5733,
+            "y": 0.2499237,
+            "z": -24.0936737
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 41.33133,
+            "z": 0.0
+          },
+          "Skin": 2024586973
+        },
+        {
+          "Id": "b15c3b7b-cd25-4ab7-8e02-df03329bc21e",
+          "PrefabName": "assets/prefabs/deployable/chair/chair.deployed.prefab",
+          "Position": {
+            "x": 0.107658237,
+            "y": 0.249916077,
+            "z": 8.83286
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 86.73821,
+            "z": 0.0
+          },
+          "Skin": 2024586973
         }
       ]
     }
