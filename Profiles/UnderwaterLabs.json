@@ -1,0 +1,25 @@
+{
+  "Name": "UnderwaterLabs",
+  "Author": "[HELP] Tanki 21/10/2020 :'(",
+  "SchemaVersion": 2.0,
+  "MonumentData": {
+    "module_1500x1500_4way_lshaped": {
+      "Entities": [
+        {
+          "Id": "c148bda9-8b12-4ad3-b38c-9ca89c532506",
+          "PrefabName": "assets/bundled/prefabs/static/recycler_static.prefab",
+          "Position": {
+            "x": -0.496458828,
+            "y": -1.24058533,
+            "z": 10.09839
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 179.177277,
+            "z": 0.0
+          }
+        }
+      ]
+    }
+  }
+}
