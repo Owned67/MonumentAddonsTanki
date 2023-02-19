@@ -1,6 +1,6 @@
 ## Video Tutorial
 
-[![Video Tutorial](https://img.youtube.com/vi/fkGpFBNs8_A/mqdefault.jpg)](https://www.youtube.com/watch?v=fkGpFBNs8_A)
+[![Video Tutorial](https://img.youtube.com/vi/fkGpFBNs8_A/maxresdefault.jpg)](https://www.youtube.com/watch?v=fkGpFBNs8_A)
 
 ## Features
 
@@ -39,6 +39,8 @@ Easily spawn permanent entities at monuments, which auto respawn after restarts 
 - Add barricades and walls to block off sections of monuments
 - Periodically spawn loot containers, key cards, vehicles, and more
 - Dynamically change monuments throughout a wipe by enabling/disabling profiles via other plugins
+- Add recycler underwaterlabs
+- Add/modified vending to outpost vending
 
 List of spawnable entities: [https://github.com/OrangeWulf/Rust-Docs/blob/master/Entities.md](https://github.com/OrangeWulf/Rust-Docs/blob/master/Entities.md)
 
@@ -60,6 +62,8 @@ Several example profiles are included below. Run the corresponding command snipp
 - `mainstall MonumentLifts` -- Adds car lifts to gas station and supermarket (same as the MonumentLifts plugin).
 - `mainstall MonumentsRecycler` -- Adds recyclers to Cargo Ship, Oilrigs, Dome and Fishing Villages (same as the MonumentsRecycler plugin).
 - `mainstall TrainStationCCTV` -- Adds 6 CCTVs and one computer station to each underground Train Station.
+- `mainstall CargoShipCCTV` -- Adds 7 CCTVs and one computer station to cargo ship (same as the Cargo Ship CCTV plugin).
+- `mainstall OilRigSharks` -- Adds one shark to small rig and two sharks to lage rig.
 
 These example profiles are installed from https://github.com/WheteThunger/MonumentAddons/blob/master/Profiles/.
 Don't see what you're looking for? Want to showcase a profile you created? Fork the repository on [GitHub](https://github.com/WheteThunger/MonumentAddons), commit the changes, and submit a pull request!
@@ -172,10 +176,12 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 
 ```json
 {
-  "DebugDisplayDistance": 150.0,
-  "DeployableOverrides": {
+  "Debug display distance": 150.0,
+  "Persist entities while the plugin is unloaded": false,
+  "Deployable overrides": {
     "arcade.machine.chippy": "assets/bundled/prefabs/static/chippyarcademachine.static.prefab",
     "autoturret": "assets/content/props/sentry_scientists/sentry.bandit.static.prefab",
+    "bbq": "assets/bundled/prefabs/static/bbq.static.prefab",
     "boombox": "assets/prefabs/voiceaudio/boombox/boombox.static.prefab",
     "box.repair.bench": "assets/bundled/prefabs/static/repairbench_static.prefab",
     "cctv.camera": "assets/prefabs/deployable/cctvcamera/cctv.static.prefab",
@@ -187,21 +193,30 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
     "modularcarlift": "assets/bundled/prefabs/static/modularcarlift.static.prefab",
     "research.table": "assets/bundled/prefabs/static/researchtable_static.prefab",
     "samsite": "assets/prefabs/npc/sam_site_turret/sam_static.prefab",
+    "small.oil.refinery": "assets/bundled/prefabs/static/small_refinery_static.prefab",
     "telephone": "assets/bundled/prefabs/autospawn/phonebooth/phonebooth.static.prefab",
     "vending.machine": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
     "wall.frame.shopfront.metal": "assets/bundled/prefabs/static/wall.frame.shopfront.metal.static.prefab",
     "workbench1": "assets/bundled/prefabs/static/workbench1.static.prefab",
     "workbench2": "assets/bundled/prefabs/static/workbench2.static.prefab"
   },
-  "StoreCustomVendingSetupSettingsInProfiles": false,
-  "PersistEntitiesAfterUnload": false
+  "Xmas tree decorations (item short names)": [
+    "xmas.decoration.gingerbreadmen",
+    "xmas.decoration.star",
+    "xmas.decoration.tinsel",
+    "xmas.decoration.candycanes",
+    "xmas.decoration.pinecone",
+    "xmas.decoration.lights"
+  ]
 }
 ```
 
-- `DebugDisplayDistance` -- Determines how far away you can see debug information about entities (i.e., when using `mashow`).
-- `DeployableOverrides` -- Determines which entity will be spawned when using `maspawn` if you don't specify the entity name in the command. For example, while you are holding an auto turret, running `maspawn` will spawn the `sentry.bandit.static` prefab instead of the `autoturret_deployed` prefab.
-- `StoreCustomVendingSetupSettingsInProfiles` (`true` or `false`) -- While `true`, vending machine settings for Custom Vending Setup will be stored within Monument Addons profiles data files rather than in Custom Vending Setup data files. This allows you to reposition vending machines without losing their settings. The default value is currently `false`, but in the future, this option will be removed and the behavior will be as if this option were set to `true`.
-- `PersistEntitiesAfterUnload` (`true` or `false`) -- While `true`, entities spawned by `maspawn` will remain after the plugin has unloaded, rather than being removed. Enabling persistence addresses several problems, such as player items getting deleted from recyclers and other containers when profiles are reloaded. Note: This option currently has no effect on Pastes, Spawn Groups or Custom Addons, meaning that those will always be removed when the plugin unloads.
+- `Debug display distance` -- Determines how far away you can see debug information about entities (i.e., when using `mashow`).
+- `Persist entities while the plugin is unloaded` (`true` or `false`) -- Determines whether entities spawned by `maspawn` will remain while the plugin is unloaded. Please carefully read and understand the documentation about this option before enabling it. Note: This option currently has no effect on Pastes, Spawn Groups or Custom Addons, meaning that those will always be despawned/respawned when the plugin reloads.
+  - While `false` (default), when the plugin unloads, it will despawn all entities spawned via `maspawn`. When the plugin subsequently reloads, those entities will be respawned from scratch. This means, for entities that maintain state (such as player items temporarily residing in recyclers), that state will be lost whenever the plugin unloads. The most practical consequence of using this mode is that player items inside containers will be lost when a profile is reloaded, when the plugin is reloaded, or when the server reboots. Despite that limitation, `false` is the most simple and stable value for this option because it ensures consistent reproducibility across plugin reloads.
+  - While `true`, when the plugin unloads, all entities spawned by via `maspawn` will remain, in order to preserve their state (e.g., items inside a recycler). When the plugin subsequently reloads, it will find the existing entities, reconcile how they differ from the enabled profiles, and despawn/respawn/reposition/modify them as needed. The plugin will try to avoid despawning/respawning an entity that is already present, in order to preserve the entity's state. Despite this sounding like the more obvious mode of the plugin, it is more complex and less stable than the default mode, and should therefore be enabled with caution. In extremely rare circumstances, this may mode cause duplicate entities to be spawned after server reboots, if the plugin is unable to determine that existing entities correspond to ones declared in profiles.
+- `Deployable overrides` -- Determines which entity will be spawned when using `maspawn` if you don't specify the entity name in the command. For example, while you are holding an auto turret, running `maspawn` will spawn the `sentry.bandit.static` prefab instead of the `autoturret_deployed` prefab.
+- `Xmas tree decorations (item short names)` -- Determines which decorations will be automatically added to `xmas_tree.deployed` entities spawned via `maspawn`.
 
 ## Localization
 

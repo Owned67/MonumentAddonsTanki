@@ -128,6 +128,8 @@ namespace Oxide.Plugins
             _pluginData = StoredData.Load(_profileStore);
             _profileStateData = ProfileStateData.Load(_pluginData);
 
+            _pluginConfig.Init();
+
             // Ensure the profile folder is created to avoid errors.
             _profileStore.EnsureDefaultProfile();
 
@@ -2891,6 +2893,10 @@ namespace Oxide.Plugins
 
         #region Helper Methods
 
+        public static void LogInfo(string message) => Interface.Oxide.LogInfo($"[Monument Addons] {message}");
+        public static void LogError(string message) => Interface.Oxide.LogError($"[Monument Addons] {message}");
+        public static void LogWarning(string message) => Interface.Oxide.LogWarning($"[Monument Addons] {message}");
+
         private static bool TryRaycast(BasePlayer player, out RaycastHit hit, float maxDistance = MaxRaycastDistance)
         {
             return Physics.Raycast(player.eyes.HeadRay(), out hit, maxDistance, HitLayers, QueryTriggerInteraction.Ignore);
@@ -5567,11 +5573,12 @@ namespace Oxide.Plugins
                 var computerStation = Entity as ComputerStation;
                 if (computerStation != null && computerStation.isStatic)
                 {
+                    var computerStation2 = computerStation;
                     computerStation.CancelInvoke(computerStation.GatherStaticCameras);
                     computerStation.Invoke(() =>
                     {
                         PluginInstance.TrackStart();
-                        GatherStaticCameras(computerStation);
+                        GatherStaticCameras(computerStation2);
                         PluginInstance.TrackEnd();
                     }, 1);
                 }
@@ -5588,10 +5595,11 @@ namespace Oxide.Plugins
                 var vehicleSpawner = Entity as VehicleSpawner;
                 if (vehicleSpawner != null)
                 {
+                    var vehicleSpawner2 = vehicleSpawner;
                     vehicleSpawner.Invoke(() =>
                     {
                         PluginInstance.TrackStart();
-                        EntityUtils.ConnectNearbyVehicleVendor(vehicleSpawner);
+                        EntityUtils.ConnectNearbyVehicleVendor(vehicleSpawner2);
                         PluginInstance.TrackEnd();
                     }, 1);
                 }
@@ -5600,10 +5608,11 @@ namespace Oxide.Plugins
                 if (vehicleVendor != null)
                 {
                     // Use a slightly longer delay than the vendor check check since this can short-circuit as an optimization.
+                    var vehicleVendor2 = vehicleVendor;
                     vehicleVendor.Invoke(() =>
                     {
                         PluginInstance.TrackStart();
-                        EntityUtils.ConnectNearbyVehicleSpawner(vehicleVendor);
+                        EntityUtils.ConnectNearbyVehicleSpawner(vehicleVendor2);
                         PluginInstance.TrackEnd();
                     }, 2);
                 }
@@ -5621,13 +5630,14 @@ namespace Oxide.Plugins
                 var fogMachine = Entity as FogMachine;
                 if (fogMachine != null)
                 {
+                    var fogMachine2 = fogMachine;
                     fogMachine.SetFlag(BaseEntity.Flags.On, true);
                     fogMachine.InvokeRepeating(() =>
                     {
-                        fogMachine.SetFlag(FogMachine.Emitting, true);
-                        fogMachine.Invoke(fogMachine.EnableFogField, 1f);
-                        fogMachine.Invoke(fogMachine.DisableNozzle, fogMachine.nozzleBlastDuration);
-                        fogMachine.Invoke(fogMachine.FinishFogging, fogMachine.fogLength);
+                        fogMachine2.SetFlag(FogMachine.Emitting, true);
+                        fogMachine2.Invoke(fogMachine2.EnableFogField, 1f);
+                        fogMachine2.Invoke(fogMachine2.DisableNozzle, fogMachine2.nozzleBlastDuration);
+                        fogMachine2.Invoke(fogMachine2.FinishFogging, fogMachine2.fogLength);
                     },
                     UnityEngine.Random.Range(0f, 5f),
                     fogMachine.fogLength - 1);
@@ -5670,10 +5680,11 @@ namespace Oxide.Plugins
                 var doorManipulator = Entity as DoorManipulator;
                 if (doorManipulator != null && doorManipulator.targetDoor == null)
                 {
+                    var doorManipulator2 = doorManipulator;
                     doorManipulator.Invoke(() =>
                     {
                         PluginInstance.TrackStart();
-                        EntityUtils.ConnectNearbyDoor(doorManipulator);
+                        EntityUtils.ConnectNearbyDoor(doorManipulator2);
                         PluginInstance.TrackEnd();
                     }, 1);
                 }
@@ -5689,6 +5700,43 @@ namespace Oxide.Plugins
                 if (telephone != null && telephone.prefabID == 1009655496)
                 {
                     PhoneUtils.NameTelephone(telephone, Monument, Position, PluginInstance._monumentHelper);
+                }
+
+                var microphoneStand = Entity as MicrophoneStand;
+                if ((object)microphoneStand != null)
+                {
+                    var microphoneStand2 = microphoneStand;
+                    microphoneStand.Invoke(() =>
+                    {
+                        PluginInstance.TrackStart();
+                        microphoneStand2.PostMapEntitySpawn();
+                        PluginInstance.TrackEnd();
+                    }, 1);
+                }
+
+                var storageContainer = Entity as StorageContainer;
+                if ((object)storageContainer != null)
+                {
+                    storageContainer.isLockable = false;
+                    storageContainer.isMonitorable = false;
+                }
+
+                var christmasTree = Entity as ChristmasTree;
+                if ((object)christmasTree != null)
+                {
+                    foreach (var itemShortName in _pluginConfig.XmasTreeDecorations)
+                    {
+                        var item = ItemManager.CreateByName(itemShortName);
+                        if (item == null)
+                            continue;
+
+                        if (!item.MoveToContainer(christmasTree.inventory))
+                        {
+                            item.Remove();
+                        }
+                    }
+
+                    christmasTree.inventory.SetLocked(true);
                 }
 
                 if (EntityData.Scale != 1 || Entity.GetParentEntity() is SphereEntity)
@@ -10265,17 +10313,29 @@ namespace Oxide.Plugins
             [JsonProperty("Debug", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public bool Debug = false;
 
-            [JsonProperty("DebugDisplayDistance")]
-            public float DebugDisplayDistance = 150;
+            [JsonProperty("EnableDynamicMonuments")]
+            [DefaultValue(true)]
+            private bool DeprecatedEnableDynamicMonuments { set { EnableDynamicMonuments = value; } }
 
-            [JsonProperty("EnableDynamicMonuments", DefaultValueHandling = DefaultValueHandling.Ignore)]
+            [JsonProperty("Enable dynamic monuments", DefaultValueHandling = DefaultValueHandling.Ignore)]
             [DefaultValue(true)]
             public bool EnableDynamicMonuments = true;
 
+            [JsonProperty("DebugDisplayDistance")]
+            private float DeprecatedDebugDisplayDistance { set { DebugDisplayDistance = value; } }
+
+            [JsonProperty("Debug display distance")]
+            public float DebugDisplayDistance = 150;
             [JsonProperty("PersistEntitiesAfterUnload")]
+            private bool DeprecatedEnableEntitySaving { set { EnableEntitySaving = value; } }
+
+            [JsonProperty("Persist entities while the plugin is unloaded")]
             public bool EnableEntitySaving = false;
 
             [JsonProperty("DeployableOverrides")]
+            public Dictionary<string, string> DeprecatedDeployableOverrides { set { DeployableOverrides = value; } }
+
+            [JsonProperty("Deployable overrides")]
             public Dictionary<string, string> DeployableOverrides = new Dictionary<string, string>
             {
                 ["arcade.machine.chippy"] = "assets/bundled/prefabs/static/chippyarcademachine.static.prefab",
@@ -10299,6 +10359,40 @@ namespace Oxide.Plugins
                 ["workbench1"] = "assets/bundled/prefabs/static/workbench1.static.prefab",
                 ["workbench2"] = "assets/bundled/prefabs/static/workbench2.static.prefab",
             };
+
+            [JsonProperty("Xmas tree decorations (item shortnames)")]
+            public string[] XmasTreeDecorations = new string[]
+            {
+                "xmas.decoration.baubels",
+                "xmas.decoration.candycanes",
+                "xmas.decoration.gingerbreadmen",
+                "xmas.decoration.lights",
+                "xmas.decoration.pinecone",
+                "xmas.decoration.star",
+                "xmas.decoration.tinsel",
+            };
+
+            public void Init()
+            {
+                if (XmasTreeDecorations != null)
+                {
+                    foreach (var itemShortName in XmasTreeDecorations)
+                    {
+                        var itemDefinition = ItemManager.FindItemDefinition(itemShortName);
+                        if (itemDefinition == null)
+                        {
+                            LogError(($"Invalid item short name in config: {itemShortName}"));
+                            continue;
+                        }
+
+                        if (itemDefinition.GetComponent<ItemModXMasTreeDecoration>() == null)
+                        {
+                            LogError(($"Item is not an Xmas tree decoration: {itemShortName}"));
+                            continue;
+                        }
+                    }
+                }
+            }
         }
 
         private Configuration GetDefaultConfig() => new Configuration();
