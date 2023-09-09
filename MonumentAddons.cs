@@ -29,7 +29,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Monument Addons", "WhiteThunder", "0.14.1")]
+    [Info("Monument Addons", "WhiteThunder", "0.14.2")]
     [Description("Allows adding entities, spawn points and more to monuments.")]
     internal class MonumentAddons : CovalencePlugin
     {
@@ -55,7 +55,6 @@ namespace Oxide.Plugins
         private const string CargoShipShortName = "cargoshiptest";
         private const string DefaultProfileName = "Default";
         private const string DefaultUrlPattern = "https://github.com/Owned67/MonumentAddons/blob/master/Profiles/{0}.json?raw=true";
-
 
         private static readonly int HitLayers = Rust.Layers.Solid
             | Rust.Layers.Mask.Water;
@@ -1173,6 +1172,7 @@ namespace Oxide.Plugins
                         _adapterDisplayManager.SetPlayerProfile(basePlayer, controller);
                         _adapterDisplayManager.ShowAllRepeatedly(basePlayer);
                     }
+
                     break;
                 }
 
@@ -1287,6 +1287,7 @@ namespace Oxide.Plugins
                     {
                         _adapterDisplayManager.ShowAllRepeatedly(basePlayer);
                     }
+
                     break;
                 }
 
@@ -1313,6 +1314,7 @@ namespace Oxide.Plugins
                         _adapterDisplayManager.SetPlayerProfile(basePlayer, controller);
                         _adapterDisplayManager.ShowAllRepeatedly(basePlayer);
                     }
+
                     break;
                 }
 
@@ -1346,6 +1348,7 @@ namespace Oxide.Plugins
                         _adapterDisplayManager.SetPlayerProfile(basePlayer, controller);
                         _adapterDisplayManager.ShowAllRepeatedly(basePlayer);
                     }
+
                     break;
                 }
 
@@ -1459,6 +1462,7 @@ namespace Oxide.Plugins
                         _adapterDisplayManager.SetPlayerProfile(basePlayer, newProfileController);
                         _adapterDisplayManager.ShowAllRepeatedly(basePlayer);
                     }
+
                     break;
                 }
 
@@ -2935,6 +2939,7 @@ namespace Oxide.Plugins
                 {
                     addonDefinition = customAddonMatches.First();
                 }
+
                 return true;
             }
 
@@ -3147,6 +3152,7 @@ namespace Oxide.Plugins
             {
                 player.Reply("{0}", string.Empty, errorMessage);
             }
+
             return true;
         }
 
@@ -3194,7 +3200,7 @@ namespace Oxide.Plugins
             var spawnPointAdapter = GetSpawnPointAdapter(entity);
             if (spawnPointAdapter != null)
             {
-                // First see if the caller wants a SpawnPointAdapter.
+                // First check if the caller wants a SpawnPointAdapter, else try to give a SpawnGroupAdapter.
                 var spawnAdapter = spawnPointAdapter as TAdapter
                     ?? spawnPointAdapter.SpawnGroupAdapter as TAdapter;
 
@@ -3619,6 +3625,7 @@ namespace Oxide.Plugins
                     if (cargoShip != null)
                         cargoShipList.Add(new DynamicMonument(cargoShip, isMobile: true));
                 }
+
                 return cargoShipList.Count > 0 ? cargoShipList : null;
             }
 
@@ -3816,6 +3823,7 @@ namespace Oxide.Plugins
                     if (filterShortPrefabName == null || entity.ShortPrefabName == filterShortPrefabName)
                         return entity;
                 }
+
                 return null;
             }
 
@@ -4080,6 +4088,7 @@ namespace Oxide.Plugins
                             {
                                 _uniqueNameByPrefabPath[prefabPath] = partialPath.ToLower().Replace(".prefab", string.Empty);
                             }
+
                             remainingPrefabPaths.RemoveAt(i);
                         }
                     }
@@ -4177,6 +4186,7 @@ namespace Oxide.Plugins
                     {
                         RefreshPoints();
                     }
+
                     Adapter = null;
                     SecondaryPressedTime = float.MaxValue;
                 }
@@ -6210,7 +6220,7 @@ namespace Oxide.Plugins
                 var vehicleVendor = Entity as VehicleVendor;
                 if (vehicleVendor != null)
                 {
-                    // Use a slightly longer delay than the vendor check check since this can short-circuit as an optimization.
+                    // Use a slightly longer delay than the vendor check since this can short-circuit as an optimization.
                     var vehicleVendor2 = vehicleVendor;
                     vehicleVendor.Invoke(() =>
                     {
@@ -6443,6 +6453,7 @@ namespace Oxide.Plugins
                             cargoCameraList.Add(cctv);
                         }
                     }
+
                     return cargoCameraList;
                 }
 
@@ -6460,6 +6471,7 @@ namespace Oxide.Plugins
                         cameraList.Add(cctv);
                     }
                 }
+
                 return cameraList;
             }
 
@@ -6717,6 +6729,7 @@ namespace Oxide.Plugins
                     {
                         Array.Clear(signage.textureIDs, 0, signage.textureIDs.Length);
                     }
+
                     return;
                 }
 
@@ -6946,6 +6959,7 @@ namespace Oxide.Plugins
                         if (computerStation != null && computerStation.isStatic)
                             cargoComputerStationList.Add(computerStation);
                     }
+
                     return cargoComputerStationList;
                 }
 
@@ -6961,6 +6975,7 @@ namespace Oxide.Plugins
                     if (computerStation != null && !computerStation.IsDestroyed && computerStation.isStatic)
                         computerStationList.Add(computerStation);
                 }
+
                 return computerStationList;
             }
         }
@@ -7435,7 +7450,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                var heli = vehicle as MiniCopter;
+                var heli = vehicle as PlayerHelicopter;
                 if (heli != null)
                 {
                     heli.lastEngineOnTime = float.MaxValue;
@@ -7693,7 +7708,6 @@ namespace Oxide.Plugins
                     _transform.SetPositionAndRotation(IntendedPosition, IntendedRotation);
                     SpawnPoint.MoveSpawnedInstances();
                 }
-
             }
         }
 
@@ -7869,6 +7883,7 @@ namespace Oxide.Plugins
                     {
                         SpawnGroup.prefabs[i].weight = SpawnGroupData.Prefabs[i].Weight;
                     }
+
                     return;
                 }
 
@@ -8302,6 +8317,7 @@ namespace Oxide.Plugins
                     otherPlugin = existingAddon.OwnerPlugin;
                     return true;
                 }
+
                 return false;
             }
 
@@ -8315,6 +8331,7 @@ namespace Oxide.Plugins
                     addonsForPlugin = new List<CustomAddonDefinition>();
                     _customAddonsByPlugin[addonDefinition.OwnerPlugin.Name] = addonsForPlugin;
                 }
+
                 addonsForPlugin.Add(addonDefinition);
 
                 if (_plugin._serverInitialized)
@@ -9208,6 +9225,7 @@ namespace Oxide.Plugins
                     playerInfo = new PlayerInfo();
                     _playerInfo[player.userID] = playerInfo;
                 }
+
                 return playerInfo;
             }
         }
@@ -9518,6 +9536,7 @@ namespace Oxide.Plugins
                         _controllersByData[data] = controller;
                     }
                 }
+
                 return controller;
             }
 
@@ -10241,6 +10260,7 @@ namespace Oxide.Plugins
                     {
                         total += prefabEntry.Weight;
                     }
+
                     return total;
                 }
             }
@@ -10543,8 +10563,10 @@ namespace Oxide.Plugins
                         {
                             parentSpawnGroupData.SpawnPoints.RemoveAt(index);
                         }
+
                         return true;
                     }
+
                     return false;
                 }
 
@@ -10884,6 +10906,7 @@ namespace Oxide.Plugins
                     if (StringUtils.EqualsCaseInsensitive(name, profileName))
                         return name;
                 }
+
                 return profileName;
             }
         }
@@ -11593,6 +11616,7 @@ namespace Oxide.Plugins
 
             [JsonProperty("Debug display distance")]
             public float DebugDisplayDistance = 150;
+
             [JsonProperty("PersistEntitiesAfterUnload")]
             private bool DeprecatedEnableEntitySaving { set { EnableEntitySaving = value; } }
 
@@ -12163,6 +12187,7 @@ namespace Oxide.Plugins.MonumentAddonsExtensions
                 value = new TValue();
                 dict[key] = value;
             }
+
             return value;
         }
     }
