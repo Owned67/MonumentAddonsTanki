@@ -1,0 +1,25 @@
+{
+  "Name": "silo",
+  "Author": "Tanki 21/10/2020 :'(",
+  "SchemaVersion": 2.0,
+  "MonumentData": {
+    "nuclear_missile_silo": {
+      "Entities": [
+        {
+          "Id": "80c31e88-e46e-49be-a14b-ea786374e7ef",
+          "PrefabName": "assets/bundled/prefabs/static/recycler_static.prefab",
+          "Position": {
+            "x": 57.82667,
+            "y": -13.3388214,
+            "z": 2.93970037
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 270.909363,
+            "z": 0.0
+          }
+        }
+      ]
+    }
+  }
+}
