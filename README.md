@@ -12,6 +12,7 @@ Easily spawn permanent entities at monuments, which auto respawn after restarts 
 - Entities are indestructible, have no stability, free electricity, and cannot be picked up
 - Supports vanilla monuments, custom monuments, train tunnels, underwater labs, and cargo ship
 - Allows skinning spawned entities
+- (Advanced) Allows building monument puzzles
 - (Advanced) Allows placing spawn points for loot containers, key cards, vehicles, and more
 - [Sign Artist](https://umod.org/plugins/sign-artist) integration allows persisting sign images
 - [Entity Scale Manager](https://umod.org/plugins/entity-scale-manager) integration allows persisting entity scale
@@ -36,11 +37,11 @@ Easily spawn permanent entities at monuments, which auto respawn after restarts 
 - Add CCTVs and computer stations
 - Add instruments, swimming pools, arcade machines
 - Add gambling wheel, slot machines, poker tables
+- Add drone marketplaces
+- Add CH47 drop zones
 - Add barricades and walls to block off sections of monuments
 - Periodically spawn loot containers, key cards, vehicles, and more
 - Dynamically change monuments throughout a wipe by enabling/disabling profiles via other plugins
-- Add recycler underwaterlabs
-- Add/modified vending to outpost vending
 
 List of spawnable entities: [https://github.com/OrangeWulf/Rust-Docs/blob/master/Entities.md](https://github.com/OrangeWulf/Rust-Docs/blob/master/Entities.md)
 
@@ -56,19 +57,23 @@ Let's face it, you are probably planning to use this plugin the same way as many
 
 Several example profiles are included below. Run the corresponding command snippet to install each profile.
 
-- `mainstall OutpostAirwolf` -- Adds an Air Wolf vendor to Outpost, with some ladders to allow access.
 - `mainstall BarnAirwolf` -- Adds an Air Wolf vendor to Large Barn and Ranch.
+- `mainstall CargoShipCCTV` -- Adds 7 CCTVs and one computer station to cargo ship (same as the Cargo Ship CCTV plugin).
 - `mainstall FishingVillageAirwolf` -- Adds an Air Wolf vendor to Large Fishing Village and to one of the small Fishing Villages.
+- `mainstall MonumentCooking` -- Adds a cooking static (BBQ / camp fire / hobo barrel) to safe zones and low-level named monuments that lack them.
 - `mainstall MonumentLifts` -- Adds car lifts to gas station and supermarket (same as the MonumentLifts plugin).
 - `mainstall MonumentsRecycler` -- Adds recyclers to Cargo Ship, Oilrigs, Dome and Fishing Villages (same as the MonumentsRecycler plugin).
-- `mainstall TrainStationCCTV` -- Adds 6 CCTVs and one computer station to each underground Train Station.
-- `mainstall CargoShipCCTV` -- Adds 7 CCTVs and one computer station to cargo ship (same as the Cargo Ship CCTV plugin).
 - `mainstall OilRigSharks` -- Adds one shark to small rig and two sharks to lage rig.
+- `mainstall OutpostAirwolf` -- Adds an Air Wolf vendor to Outpost, with some ladders to allow access.
+- `mainstall SafeZoneRecyclers` -- Adds a recycler to Fishing Villages, Large Barn, and Ranch (different locations than MonumentsRecycler for compatibility).
+- `mainstall TrainStationCCTV` -- Adds 6 CCTVs and one computer station to each underground Train Station.
 
 These example profiles are installed from https://github.com/WheteThunger/MonumentAddons/blob/master/Profiles/.
 Don't see what you're looking for? Want to showcase a profile you created? Fork the repository on [GitHub](https://github.com/WheteThunger/MonumentAddons), commit the changes, and submit a pull request!
 
 ### Spawning static entities
+
+Follow these steps to spawn static entities.
 
 1. Go to any monument, such as a gas station.
 2. Aim somewhere, such as a floor, wall or ceiling.
@@ -79,7 +84,24 @@ How this works:
 - It spawns the entity at all other identical monuments (for example, at every gas station) using the correct relative position and rotation for those monuments.
 - It saves this information in the plugin data files, so that the entity can be respawned when the plugin is reloaded, when the server is restarted, or when the server is wiped, even if using a new map seed (don't worry, this works well as long as the monuments don't significantly change between Rust updates).
 
+### Creating puzzles
+
+Follow these steps to create an example puzzle.
+
+1. Go to any monument, such as a gas station.
+2. Aim at the floor, then run the command `maspawn generator.static`. This will be the root of your puzzle, automatically resetting it on a schedule. It's recommended to place the generator near the center of the puzzle so it can evenly detect nearby players for the purpose of delaying the puzzle from resetting.
+3. Aim at a wall, outside the puzzle room, then run the command `maspawn fusebox`.
+4. Aim at the floor in a doorway, then run the command `maspawn security.blue`. Reposition the door with Telekinesis if needed.
+5. Aim at the wall next to the front side of the doorway, then run the commands `maspawn cardreader` and `maspawn doormanipulator`.
+6. Aim at the wall next to the back side of the doorway, then run the commands `maspawn pressbutton`, and `maspawn orswitch`.
+7. Aim at the card reader, then run the command `macardlevel 2` to make it a blue card reader.
+8. Equip a wire tool, then run the command `mawire`.
+9. Connect `generator.static` -> `fusebox` -> `cardreader` -> `orswitch` -> `doormanipulator`.
+10. Connect `pressbutton` -> `orswitch`.
+
 ### Creating spawn points
+
+Follow these steps to create example spawn points.
 
 1. Go to any monument, such as a gas station.
 2. Aim somewhere on the ground.
@@ -102,7 +124,9 @@ How this works:
   - Also spawns the entity at other matching monuments (e.g., if at a gas station, will spawn at all gas stations).
     - A monument is considered a match if it has the same short prefab name or the same alias as the monument you are aiming at. The Monument Finder plugin will assign aliases for primarily underground tunnels. For example, `station-sn-0` and `station-we-0` will both use the `TrainStation` alias, allowing all train stations to have the same entities.
   - Saves the entity info to the plugin data file so that reloading the plugin (or restarting the server) will respawn the entity.
+- `maprefab <prefab>` -- Creates an instance of a non-entity prefab. Note: This is **very** limited. Only prefabs with the `assets/bundled/prefabs/modding` path are supported, and the prefab instances are not networked to clients (because the game does not offer that capability) so they will be invisible, despite having real effects on the server side. This command is intended primarily for placing CH47 drop zones (`maprefab dropzone`), but it can also be used to place loot and NPC spawners that custom maps tend to use, although you will have much greater control of spawners when using the spawn point capabilities of the plugin instead.
 - `mapaste <file>` -- Pastes a building from the CopyPaste plugin, using the specified file name.
+- `maundo` -- Undo a recent `makill` action.
 - `mashow <optional_profile_name> <optional_duration_in_seconds>` -- Shows debug information about nearby entities spawned by this plugin, for the specified duration. Defaults to 60 seconds.
   - Debug information is also automatically displayed for at least 60 seconds when using other commands.
   - When specifying a profile name, entities belonging to other profiles will have gray text.
@@ -117,6 +141,19 @@ The following commands only work on objects managed by this plugin. The effect o
 - `masetid <id>` -- Updates the RC identifier of the CCTV camera you are aiming at.
   - Note: Each CCTV's RC identifier will have a numeric suffix like `1`, `2`, `3` and so on. This is done because some monuments may be duplicated, and each CCTV must have a unique identifier.
 - `masetdir` -- Updates the direction of the CCTV you are aiming at, so that it points toward you.
+- `maskull <name>` -- Sets the display name of the skull trophy you are aiming at.
+
+### Puzzles
+
+- `mawire <optional color>` -- Temporarily enhances your currently held wire tool, allowing you to connect electrical entities spawned via `maspawn`. Allowed colors: `Default`, `Red`, `Green`, `Blue`, `Yellow`, `Pink`, `Purple`, `Orange`, `White`, `LightBlue`, `Invisible`. Note: When using the `Invisible` color, you can only directly connect entity inputs and outputs, not place intermediate wire points.
+- `macardlevel <1-3>` (1 = green, 2 = blue, 3 = red) -- Sets the access level of the card reader you are aiming at. For example, `macardlevel 2` will make the card reader visually blue and require a blue key card.
+- `mapuzzle reset` -- Resets the puzzle connected to the entity you are looking at. For example, when looking at a static generator (i.e., `generator.static`) or an entity connected directly or indirectly to a static generator.
+- `mapuzzle set <option> <value>` -- Sets a property of the puzzle root entity you are looking at. This applies only to static generators (i.e., `generator.static`).
+  - `PlayersBlockReset`: true/false -- While `true`, the puzzle will not make progress toward the next reset while any players are within the distance `PlayerDetectionRadius`.
+  - `PlayerDetectionRadius`: number -- The distance in which players can block the puzzle from making progress toward its next reset.
+  - `SecondsBetweenReset`: number -- The number of seconds between puzzle resets. Note: Reset progress does not advance while `PlayersBlockReset` is enabled and players are nearby.
+- `mapuzzle add <group_name>` -- Associates a spawn group with the puzzle root entity you are aiming at (i.e., `generator.static`). Whenever a puzzle resets, associated spawn groups will despawn and respawn entities, allowing you to synchronize loot, NPCs and puzzle doors. To associate a spawn group, it must be created by the plugin, stored under the same profile, and be at the same monument.
+- `mapuzzle remove <group_name>` -- Disassociates a spawn group with the puzzle root entity you are aiming at (i.e., `generator.static`).
 
 ### Spawn points and spawn groups
 
@@ -128,12 +165,14 @@ The following commands only work on objects managed by this plugin. The effect o
 - `maspawngroup set <option> <value>` -- Sets a property of the spawn group you are looking at.
   - `Name`: string -- This name must be unique for the given profile + monument. This name can be used to create additional spawn points for this spawn group using `maspawnpoint create <group_name>`.
   - `MaxPopulation`: number -- The maximum number of entities that can be spawned across all spawn points in this spawn group.
-  - `RespawnDelayMin`: number -- The minimum time in minutes to wait between spawning entities.
-  - `RespawnDelayMax`: number -- The maximum time in minutes to wait between spawning entities.
-  - `SpawnPerTickMin`: number -- The minumum number of entities to try to spawn in a batch.
+  - `RespawnDelayMin`: number -- The minimum time in seconds to wait between spawning entities.
+  - `RespawnDelayMax`: number -- The maximum time in seconds to wait between spawning entities. Set to `0` to disable automated respawns, which is useful if you are associating the spawn group with a puzzle.
+  - `SpawnPerTickMin`: number -- The minimum number of entities to try to spawn in a batch.
   - `SpawnPerTickMax`: number -- The maximum number of entities to try to spawn in a batch.
   - `InitialSpawn`: true/false -- While `true`, the spawn group will spawn entities as soon as the spawn group is created (e.g., when the profile loads, when the plugin loads, or when the server reboots). While `false`, the spawn group will not spawn any entities initially, but will still spawn them later according to the defined schedule.
   - `PreventDuplicates`: true/false -- While `true`, only one of each entity prefab can be present across all spawn points in the spawn group. Vanilla Rust uses this property for spawning modules at desert military bases.
+  - `PauseScheduleWhileFull`: true/false -- While `true`, the next spawn will not be scheduled until the spawn group is below its max population. For instance, if the spawn group is at 2/2 population, and respawn delay is set to 30 minutes, once the population reaches 1/2, the 30 minute respawn timer will be started. In vanilla Rust, this feature does not exist, meaning the timer is always going, allowing for situations where loot spawns shortly after loot is taken.
+  - `RespawnWhenNearestPuzzleResets`: true/false -- While `true`, the spawn group will associate with the closest nearby vanilla puzzle. When that puzzle resets, the spawn group will despawn all entities and run one spawn tick (same behavior as when you run `maspawngroup respawn`). This is useful if you want to add spawn points for extra loot at vanilla puzzles. Note: This can only associate a custom spawn group with a **vanilla** puzzle. If you want to associate a custom spawn group with a **custom** puzzle, you must associate directly (e.g., `mapuzzle add <group_name>` while looking at the puzzle root entity).
 - `maspawngroup add <entity> <weight>` -- Adds the specified entity prefab to the spawn group you are looking at.
 - `maspawngroup remove <entity>` -- Removes the specified entity prefab from the spawn group you are looking at.
 - `maspawngroup spawn` -- Runs one spawn tick for the spawn group. For example, if you have set `SpawnPerTickMin` to 1 and `SpawnPerTickMax` to 2, running this command will spawn 1-2 entities, as long as there are available spawn points and sufficient population headroom.
@@ -150,6 +189,7 @@ Note: `masg` can be used in place of `maspawngroup`.
   - `CheckSpace`: true/false -- While `true`, entities can only spawn at this spawn point when there is sufficient space. This option is recommended for vehicle spawn points.
   - `RandomRotation` : true/false -- While `true`, entities will spawn with random rotation at this spawn point, instead of following the rotation of the spawn point itself.
   - `RandomRadius`: number -- This number determines how far away entities can spawn from this spawn point. The default is `0.0`.
+  - `PlayerDetectionRadius`: number -- This number determines how far away players must be, in order for this spawn point to spawn an entity. By default, vanilla behavior checks within `2` meters for normal spawn points, or `RandomRadius` + `1` meter for radial spawn points. Setting this value to greater than `0` will override the vanilla behavior, allowing you to enlarge or shrink the detection radius. While a player is detected within the radius, the spawn point is considered unavailable, so another spawn point within the same spawn group may be selected for spawning an entity.
 
 Note: `masp` can be used in place of `maspawnpoint`.
 
@@ -165,8 +205,9 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 - `maprofile reload <name>` -- Reloads the specified profile from disk. This despawns all the profile's addons, re-reads the data file, then respawns all the profile's addons. This is useful if you downloaded a new version of a profile or if you made manual edits to the data file.
 - `maprofile select <name>` -- Selects and enables the specified profile. Running `maspawn <entity>` will save addons to the currently selected profile. Each player can have a separate profile selected, allowing multiple players to work on different profiles at the same time.
 - `maprofile create <name>` -- Creates a new profile, enables it and selects it.
-- `maprofile rename <name> <new name>` -- Renames the specified profile. The plugin cannot delete the data file for the old name, so you will have to delete it yourself at `oxide/data/MonumentAddons/{name}.json`.
+- `maprofile rename <name> <new name>` -- Renames the specified profile.
 - `maprofile clear <name>` -- Removes all addons from the specified profile.
+- `maprofile delete <name>` -- Deletes the specified profile. The profile must first be empty or disabled.
 - `maprofile moveto <name>` -- Moves the addon you are looking at to the specified profile.
 - `maprofile install <url>` -- Installs a profile from a URL.
   - Abbreviated command: `mainstall <url>`.
@@ -214,7 +255,7 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 - `Debug display distance` -- Determines how far away you can see debug information about entities (i.e., when using `mashow`).
 - `Persist entities while the plugin is unloaded` (`true` or `false`) -- Determines whether entities spawned by `maspawn` will remain while the plugin is unloaded. Please carefully read and understand the documentation about this option before enabling it. Note: This option currently has no effect on Pastes, Spawn Groups or Custom Addons, meaning that those will always be despawned/respawned when the plugin reloads.
   - While `false` (default), when the plugin unloads, it will despawn all entities spawned via `maspawn`. When the plugin subsequently reloads, those entities will be respawned from scratch. This means, for entities that maintain state (such as player items temporarily residing in recyclers), that state will be lost whenever the plugin unloads. The most practical consequence of using this mode is that player items inside containers will be lost when a profile is reloaded, when the plugin is reloaded, or when the server reboots. Despite that limitation, `false` is the most simple and stable value for this option because it ensures consistent reproducibility across plugin reloads.
-  - While `true`, when the plugin unloads, all entities spawned by via `maspawn` will remain, in order to preserve their state (e.g., items inside a recycler). When the plugin subsequently reloads, it will find the existing entities, reconcile how they differ from the enabled profiles, and despawn/respawn/reposition/modify them as needed. The plugin will try to avoid despawning/respawning an entity that is already present, in order to preserve the entity's state. Despite this sounding like the more obvious mode of the plugin, it is more complex and less stable than the default mode, and should therefore be enabled with caution. In extremely rare circumstances, this may mode cause duplicate entities to be spawned after server reboots, if the plugin is unable to determine that existing entities correspond to ones declared in profiles.
+  - While `true`, when the plugin unloads, all entities spawned by via `maspawn` will remain, in order to preserve their state (e.g., items inside a recycler). When the plugin subsequently reloads, it will find the existing entities, reconcile how they differ from the enabled profiles, and despawn/respawn/reposition/modify them as needed. The plugin will try to avoid despawning/respawning an entity that is already present, in order to preserve the entity's state. Despite this sounding like the more obvious mode of the plugin, it is more complex and less stable than the default mode, and should therefore be enabled with caution.
 - `Deployable overrides` -- Determines which entity will be spawned when using `maspawn` if you don't specify the entity name in the command. For example, while you are holding an auto turret, running `maspawn` will spawn the `sentry.bandit.static` prefab instead of the `autoturret_deployed` prefab.
 - `Xmas tree decorations (item short names)` -- Determines which decorations will be automatically added to `xmas_tree.deployed` entities spawned via `maspawn`.
 
@@ -273,7 +314,7 @@ Use the following steps to resize entities. Requires the [Entity Scale Manager](
 
 That's all you need to do. This plugin detects when an entity is resized and automatically applies that scale to copies of the entity as matching monuments, and saves the scale in the profile's data file. When the plugin reloads, Entity Scale manager is called to reapply that scale.
 
-## Instructions for specific entities
+## Instructions for specific addons
 
 ### Heli & boat vendors
 
@@ -320,6 +361,27 @@ Use the following steps to set up a custom bandit wheel to allow players to gamb
 Notes:
 - If a betting terminal spawns more than 3 seconds after the wheel, the wheel won't know about it. This means that if you add more betting terminals after spawning the wheel, you will likely have to reload the profile to respawn the wheel so that it can find all the betting terminals.
 
+### CH47 drop zones
+
+To place a CH47 drop zone, run the command `maprefab dropzone`. It can be removed using the `makill` command.
+
+Note: In order for a CH47 to drop a crate at this location, it must be within a monument that the chinook will visit. You can use the [Better Chinook Patrol](https://umod.org/plugins/better-chinook-patrol) plugin to customize which monuments can be visited.
+
+### Common puzzle entities
+
+- `generator.static` (not `generator.small`)
+- `fusebox`
+- `cardreader`
+- `pressbutton` (not `button`)
+- `doormanipulator` (not `doorcontroller.deployed`)
+- `simpleswitch` (not `switch`)
+- `orswitch` (not `orswitch.entity`)
+- `timerswitch` (not `timer`)
+- `xorswitch` (not `xorswitch.entity`)
+- `door.hinged.security.green`, `door.hinged.security.blue`, `door.hinged.security.red`, `door.hinged.underwater_labs.security`, `door.hinged.garage_security`
+
+Note: Kinetic IO elements such as `wheelswitch` and `sliding_blast_door` are not currently able to be controlled by electricity.
+
 ## Tips
 
 - Bind `maspawn` and `makill` to keys while setting up entities to save time. Remember that running `maspawn` without specifying the entity name will spawn whichever deployable you are currently holding. Note: You may need to rotate the placement guide in some cases because the server cannot detect which way you have it rotated.
@@ -333,4 +395,4 @@ Notes:
 
 ## Uninstallation
 
-Simply remove the plugin. Spawned entities are automatically removed when the plugin unloads.
+Ensure the plugin is loaded with `Persist entities while the plugin is unloaded` set to `false`, then simply remove the plugin. All addons will be automatically removed.
