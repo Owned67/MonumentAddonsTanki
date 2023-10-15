@@ -54,7 +54,7 @@ namespace Oxide.Plugins
 
         private const string CargoShipShortName = "cargoshiptest";
         private const string DefaultProfileName = "Default";
-        private const string DefaultUrlPattern = "https://github.com/Tanki67/MonumentAddons/blob/master/Profiles/{0}.json?raw=true";
+        private const string DefaultUrlPattern = "https://github.com/Owned67/MonumentAddons/blob/master/Profiles/{0}.json?raw=true";
 
         private static readonly int HitLayers = Rust.Layers.Solid
             | Rust.Layers.Mask.Water;
