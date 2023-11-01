@@ -1,6 +1,6 @@
 {
-  "Name": "outpost",
-  "Author": "[F4F] Tanki 21/10/2020 :'(",
+  "Name": "custom_outpost",
+  "Author": "Tanki 21/10/2020 :'(",
   "SchemaVersion": 2.0,
   "Url": "https://github.com/Owned67/MonumentAddonsTanki/blob/main/Profiles/outpost.json?raw=true",
   "MonumentData": {
@@ -190,97 +190,6 @@
             "y": 89.6684952,
             "z": 0.0
           },
-          "VendingProfile": {
-            "ShopName": "black market Weapons",
-            "Monument": "assets/bundled/prefabs/autospawn/monument/medium/compound.prefab",
-            "Position": {
-              "x": 8.296265,
-              "y": 0.0912208557,
-              "z": -33.2775269
-            },
-            "Offers": [
-              {
-                "SellItem": {
-                  "ShortName": "rifle.lr300",
-                  "Amount": 1,
-                  "Ammo": 4,
-                  "AmmoType": "ammo.rifle"
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 1500
-                },
-                "RefillDelay": 3
-              },
-              {
-                "SellItem": {
-                  "ShortName": "pistol.m92",
-                  "Amount": 1,
-                  "Ammo": 6,
-                  "AmmoType": "ammo.pistol"
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 750
-                }
-              },
-              {
-                "SellItem": {
-                  "ShortName": "shotgun.spas12",
-                  "Amount": 1,
-                  "Ammo": 4,
-                  "AmmoType": "ammo.shotgun"
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 750
-                }
-              },
-              {
-                "SellItem": {
-                  "ShortName": "rifle.m39",
-                  "Amount": 1,
-                  "Ammo": 4,
-                  "AmmoType": "ammo.rifle"
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 1250
-                }
-              },
-              {
-                "SellItem": {
-                  "ShortName": "grenade.f1",
-                  "Amount": 5
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 35
-                }
-              },
-              {
-                "SellItem": {
-                  "ShortName": "weapon.mod.8x.scope",
-                  "Amount": 1
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 1200
-                }
-              },
-              {
-                "SellItem": {
-                  "ShortName": "nightvisiongoggles",
-                  "Amount": 1
-                },
-                "CurrencyItem": {
-                  "ShortName": "scrap",
-                  "Amount": 900
-                }
-              }
-            ]
-          }
-        },
         {
           "Id": "53e044a0-374c-4d3a-8124-852f8c0b3bde",
           "PrefabName": "assets/prefabs/deployable/chair/chair.deployed.prefab",
