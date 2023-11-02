@@ -1,0 +1,455 @@
+{
+  "Name": "banditmerged",
+  "Author": "Tanki 21/10/2020 :'(",
+  "SchemaVersion": 2.0,
+  "MonumentData": {
+    "compound": {
+      "Entities": [
+        {
+          "Id": "9f01be8d-288f-42c5-b358-c624f38a4345",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -24.6425781,
+            "y": 0.249423981,
+            "z": -18.5131836
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 88.7078552,
+            "z": 0.0
+          }
+        },
+        {
+          "Id": "ed2f8e12-3da5-495d-b0a3-73e5f460e6c0",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -7.875516,
+            "y": 1.69867325,
+            "z": -12.3229065
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 268.89856,
+            "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "Building Supplies Vendor",
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "dropbox",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "shelves",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 125
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "tunalight",
+                  "Amount": 3,
+                  "Capacity": 1,
+                  "Contents": [
+                    {
+                      "ShortName": "lowgradefuel",
+                      "Amount": 5
+                    }
+                  ]
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 45
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "locker",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "roadsign.gloves",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "generator.wind.scrap",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 2500
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "electric.battery.rechargable.medium",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 375
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Id": "46472468-61b5-42b4-8acd-824629e4b089",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -7.73748636,
+            "y": 1.78299332,
+            "z": -21.3165359
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 266.554932,
+            "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "Farming vendor",
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "composter",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 150
+                },
+                "RefillDelay": 1
+              },
+              {
+                "SellItem": {
+                  "ShortName": "planter.large",
+                  "Amount": 10
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1500
+                },
+                "RefillDelay": 1
+              },
+              {
+                "SellItem": {
+                  "ShortName": "water.barrel",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 150
+                },
+                "RefillDelay": 1
+              },
+              {
+                "SellItem": {
+                  "ShortName": "fluid.switch",
+                  "Amount": 3
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 450
+                },
+                "RefillDelay": 1
+              },
+              {
+                "SellItem": {
+                  "ShortName": "fluid.splitter",
+                  "Amount": 3
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 450
+                },
+                "RefillDelay": 1
+              },
+              {
+                "SellItem": {
+                  "ShortName": "ceilinglight",
+                  "Amount": 10
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 750
+                },
+                "RefillDelay": 1
+              }
+            ]
+          }
+        },
+        {
+          "Id": "443f4523-24fc-4069-95e3-6816f08c9e71",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": 8.27499,
+            "y": 0.481899261,
+            "z": 39.1423759
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 273.6615,
+            "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "Black Market Vendor",
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "rifle.lr300",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.rifle",
+                  "Capacity": 4
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 2500
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "pistol.m92",
+                  "Amount": 1,
+                  "Ammo": 6,
+                  "AmmoType": "ammo.pistol",
+                  "Capacity": 4
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "shotgun.spas12",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.shotgun",
+                  "Capacity": 3
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "grenade.f1",
+                  "Amount": 10
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 100
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "nightvisiongoggles",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "weapon.mod.8x.scope",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1500
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Id": "af06ff14-9087-4b86-8c8c-f9b933c5a7f0",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -9.6855545,
+            "y": 1.72153091,
+            "z": -30.34387
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 271.241821,
+            "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "Scrap 4 sale Vendor",
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "scrap",
+                  "Amount": 50
+                },
+                "CurrencyItem": {
+                  "ShortName": "crude.oil",
+                  "Amount": 60
+                },
+                "RefillDelay": 3
+              },
+              {
+                "SellItem": {
+                  "ShortName": "scrap",
+                  "Amount": 100
+                },
+                "CurrencyItem": {
+                  "ShortName": "metal.fragments",
+                  "Amount": 400
+                },
+                "RefillDelay": 3
+              },
+              {
+                "SellItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1000
+                },
+                "CurrencyItem": {
+                  "ShortName": "metal.refined",
+                  "Amount": 100
+                },
+                "RefillDelay": 3
+              },
+              {
+                "SellItem": {
+                  "ShortName": "scrap",
+                  "Amount": 75
+                },
+                "CurrencyItem": {
+                  "ShortName": "keycard_green",
+                  "Amount": 1
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "scrap",
+                  "Amount": 150
+                },
+                "CurrencyItem": {
+                  "ShortName": "keycard_blue",
+                  "Amount": 1
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                },
+                "CurrencyItem": {
+                  "ShortName": "keycard_red",
+                  "Amount": 1
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Id": "61af63af-78c0-4c07-a1ac-b0880012baa3",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -25.12306,
+            "y": 1.70604324,
+            "z": -27.2656631
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 94.0425644,
+            "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "Vehicles Parts vendor",
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "piston2",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "crankshaft2",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 325
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "valve2",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "sparkplug2",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "carburetor2",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 325
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "modularcarlift",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 750
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
