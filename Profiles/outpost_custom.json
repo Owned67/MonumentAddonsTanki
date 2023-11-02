@@ -176,22 +176,6 @@
               }
             ]
           }
-        },
-        
-        {
-          "Id": "b15c3b7b-cd25-4ab7-8e02-df03329bc21e",
-          "PrefabName": "assets/prefabs/deployable/chair/chair.deployed.prefab",
-          "Position": {
-            "x": 0.107658237,
-            "y": 0.249916077,
-            "z": 8.83286
-          },
-          "RotationAngles": {
-            "x": 0.0,
-            "y": 86.73821,
-            "z": 0.0
-          },
-          "Skin": 2024586973
         }
       ]
     }
