@@ -5,6 +5,118 @@
   "MonumentData": {
     "compound": {
       "Entities": [
+                {
+          "Id": "80113d52-8fb3-473b-973e-10cde4ed6946",
+          "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
+          "Position": {
+            "x": -31.92376,
+            "y": 0.256015778,
+            "z": 39.82212
+          },
+          "RotationAngles": {
+            "x": 0.0,
+            "y": 180.003326,
+            "z": 0.0
+          },
+          "VendingProfile": {
+            "ShopName": "RESOURCES X5",
+            "Monument": "assets/bundled/prefabs/autospawn/monument/medium/compound.prefab",
+            "Position": {
+              "x": -31.92377,
+              "y": 0.256015778,
+              "z": 39.82211
+            },
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "stones",
+                  "Amount": 5000
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 250
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "wood",
+                  "Amount": 5000
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 100
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "metal.fragments",
+                  "Amount": 1250
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 125
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "stones",
+                  "Amount": 750
+                },
+                "CurrencyItem": {
+                  "ShortName": "wood",
+                  "Amount": 2500
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "wood",
+                  "Amount": 2500
+                },
+                "CurrencyItem": {
+                  "ShortName": "stones",
+                  "Amount": 750
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "lowgradefuel",
+                  "Amount": 100
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 500
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "diesel_barrel",
+                  "Amount": 5
+                },
+                "CurrencyItem": {
+                  "ShortName": "lowgradefuel",
+                  "Amount": 1500
+                },
+                "RefillDelay": 5
+              },
+              {
+                "SellItem": {
+                  "ShortName": "lowgradefuel",
+                  "Amount": 1500
+                },
+                "CurrencyItem": {
+                  "ShortName": "diesel_barrel",
+                  "Amount": 5
+                }
+              }
+            ]
+          }
+        },
         {
           "Id": "3691b8d9-a66c-4c2e-8372-6f65d3d5c0e7",
           "PrefabName": "assets/prefabs/deployable/vendingmachine/npcvendingmachine.prefab",
@@ -20,6 +132,97 @@
             "z": 0.0
           },
           "VendingProfile": {
+            "ShopName": "Black Market Weapons",
+            "Monument": "assets/bundled/prefabs/autospawn/monument/medium/compound.prefab",
+            "Position": {
+              "x": 8.296265,
+              "y": 0.0912208557,
+              "z": -33.2775269
+            },
+            "Offers": [
+              {
+                "SellItem": {
+                  "ShortName": "rifle.lr300",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.rifle"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 2500
+                },
+                "RefillDelay": 3
+              },
+              {
+                "SellItem": {
+                  "ShortName": "pistol.m92",
+                  "Amount": 1,
+                  "Ammo": 6,
+                  "AmmoType": "ammo.pistol"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "shotgun.spas12",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.shotgun"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "rifle.m39",
+                  "Amount": 1,
+                  "Ammo": 4,
+                  "AmmoType": "ammo.rifle"
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 2000
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "grenade.f1",
+                  "Amount": 5
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 200
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "weapon.mod.8x.scope",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1500
+                }
+              },
+              {
+                "SellItem": {
+                  "ShortName": "nightvisiongoggles",
+                  "Amount": 1
+                },
+                "CurrencyItem": {
+                  "ShortName": "scrap",
+                  "Amount": 1250
+                }
+              }
+            ]
+          }
+        },
+        "VendingProfile": {
             "ShopName": "Building BANDIT",
             "Monument": "assets/bundled/prefabs/autospawn/monument/medium/compound.prefab",
             "Position": {
@@ -35,7 +238,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 120
+                  "Amount": 150
                 },
                 "RefillDelay": 3
               },
@@ -46,14 +249,14 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 75
+                  "Amount": 125
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "tunalight",
-                  "Amount": 5,
+                  "Amount": 3,
                   "Contents": [
                     {
                       "ShortName": "lowgradefuel",
@@ -63,7 +266,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 20
+                  "Amount": 75
                 },
                 "RefillDelay": 3
               },
@@ -74,7 +277,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 150
+                  "Amount": 200
                 },
                 "RefillDelay": 3
               },
@@ -85,7 +288,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 1500
+                  "Amount": 2500
                 },
                 "RefillDelay": 3
               },
@@ -96,7 +299,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 225
+                  "Amount": 375
                 },
                 "RefillDelay": 3
               },
@@ -137,7 +340,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 200
+                  "Amount": 300
                 },
                 "RefillDelay": 3
               },
@@ -148,7 +351,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 200
+                  "Amount": 300
                 },
                 "RefillDelay": 3
               },
@@ -159,7 +362,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 200
+                  "Amount": 300
                 },
                 "RefillDelay": 3
               },
@@ -181,7 +384,7 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 200
+                  "Amount": 300
                 },
                 "RefillDelay": 3
               },
@@ -302,73 +505,73 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 150
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "planter.large",
-                  "Amount": 1
+                  "Amount": 10
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 1500
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "water.barrel",
-                  "Amount": 1
+                  "Amount": 3
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 450
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "electric.sprinkler",
-                  "Amount": 1
+                  "Amount": 10
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 45
+                  "Amount": 750
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "fluid.switch",
-                  "Amount": 1
+                  "Amount": 3
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 150
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "fluid.splitter",
-                  "Amount": 1
+                  "Amount": 3
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 150
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "ceilinglight",
-                  "Amount": 1
+                  "Amount": 10
                 },
                 "CurrencyItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 500
                 },
                 "RefillDelay": 3
               }
@@ -394,22 +597,22 @@
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 30
+                  "Amount": 150
                 },
                 "CurrencyItem": {
                   "ShortName": "crude.oil",
-                  "Amount": 180
+                  "Amount": 200
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 100
+                  "Amount": 5
                 },
                 "CurrencyItem": {
                   "ShortName": "metal.fragments",
-                  "Amount": 2000
+                  "Amount": 200
                 },
                 "RefillDelay": 3
               },
@@ -427,7 +630,7 @@
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 45
+                  "Amount": 65
                 },
                 "CurrencyItem": {
                   "ShortName": "keycard_green",
@@ -438,7 +641,7 @@
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 150
                 },
                 "CurrencyItem": {
                   "ShortName": "keycard_blue",
@@ -449,7 +652,7 @@
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 120
+                  "Amount": 200
                 },
                 "CurrencyItem": {
                   "ShortName": "keycard_red",
@@ -478,22 +681,22 @@
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 3
+                  "Amount": 60
                 },
                 "CurrencyItem": {
                   "ShortName": "corn",
-                  "Amount": 45
+                  "Amount": 30
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 90
+                  "Amount": 1000
                 },
                 "CurrencyItem": {
                   "ShortName": "cloth",
-                  "Amount": 720
+                  "Amount": 1600
                 },
                 "RefillDelay": 3
               },
@@ -504,18 +707,18 @@
                 },
                 "CurrencyItem": {
                   "ShortName": "fish.troutsmall",
-                  "Amount": 30
+                  "Amount": 3
                 },
                 "RefillDelay": 3
               },
               {
                 "SellItem": {
                   "ShortName": "scrap",
-                  "Amount": 180
+                  "Amount": 750
                 },
                 "CurrencyItem": {
                   "ShortName": "fertilizer",
-                  "Amount": 120
+                  "Amount": 100
                 },
                 "RefillDelay": 3
               },
