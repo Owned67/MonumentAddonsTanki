@@ -190,6 +190,7 @@
             "y": 89.6684952,
             "z": 0.0
           },
+        },
         {
           "Id": "53e044a0-374c-4d3a-8124-852f8c0b3bde",
           "PrefabName": "assets/prefabs/deployable/chair/chair.deployed.prefab",
