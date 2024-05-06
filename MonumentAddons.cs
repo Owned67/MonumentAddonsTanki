@@ -19,7 +19,8 @@ using UnityEngine;
 using VLB;
 using static IOEntity;
 using static WireTool;
-using HumanNpc = global::HumanNPC;
+using HumanNPCGlobal = global::HumanNPC;
+using SkullTrophyGlobal = global::SkullTrophy;
 
 using CustomSpawnCallback = System.Func<UnityEngine.Vector3, UnityEngine.Quaternion, Newtonsoft.Json.Linq.JObject, UnityEngine.Component>;
 using CustomKillCallback = System.Action<UnityEngine.Component>;
@@ -31,7 +32,7 @@ using Facepunch;
 
 namespace Oxide.Plugins
 {
-    [Info("Monument Addons", "WhiteThunder", "0.16.0")]
+    [Info("Monument Addons", "WhiteThunder", "0.16.2")]
     [Description("Allows adding entities, spawn points and more to monuments.")]
     internal class MonumentAddons : CovalencePlugin
     {
@@ -839,7 +840,7 @@ namespace Oxide.Plugins
                 || !VerifyLookingAtAdapter(player, out EntityAdapter adapter, out EntityController controller, LangEntry.ErrorNoSuitableAddonFound))
                 return;
 
-            var skullTrophy = adapter.Entity as SkullTrophy;
+            var skullTrophy = adapter.Entity as SkullTrophyGlobal;
             if (skullTrophy == null)
             {
                 ReplyToPlayer(player, LangEntry.ErrorNoSuitableAddonFound);
@@ -4019,6 +4020,7 @@ namespace Oxide.Plugins
                 if (stabilityEntity != null)
                 {
                     stabilityEntity.grounded = true;
+                    stabilityEntity.canBeDemolished = false;
                 }
 
                 DestroyProblemComponents(entity);
@@ -4059,10 +4061,10 @@ namespace Oxide.Plugins
                     {
                         // Must be done after spawn for some reason.
                         if (buildingBlock.HasFlag(BuildingBlock.BlockFlags.CanRotate)
-                            || buildingBlock.HasFlag(BuildingBlock.BlockFlags.CanDemolish))
+                            || buildingBlock.HasFlag(StabilityEntity.DemolishFlag))
                         {
                             buildingBlock.SetFlag(BuildingBlock.BlockFlags.CanRotate, false, recursive: false, networkupdate: false);
-                            buildingBlock.SetFlag(BuildingBlock.BlockFlags.CanDemolish, false, recursive: false, networkupdate: false);
+                            buildingBlock.SetFlag(StabilityEntity.DemolishFlag, false, recursive: false, networkupdate: false);
                             buildingBlock.CancelInvoke(buildingBlock.StopBeingRotatable);
                             buildingBlock.CancelInvoke(buildingBlock.StopBeingDemolishable);
                             buildingBlock.SendNetworkUpdate_Flags();
@@ -6162,7 +6164,7 @@ namespace Oxide.Plugins
                 if (skullName == null)
                     return;
 
-                var skullTrophy = Entity as SkullTrophy;
+                var skullTrophy = Entity as SkullTrophyGlobal;
                 if (skullTrophy == null)
                     return;
 
@@ -6557,7 +6559,7 @@ namespace Oxide.Plugins
                     UpdateScale();
                 }
 
-                var skullTrophy = Entity as SkullTrophy;
+                var skullTrophy = Entity as SkullTrophyGlobal;
                 if (skullTrophy != null)
                 {
                     UpdateSkullName();
@@ -6825,6 +6827,7 @@ namespace Oxide.Plugins
             {
                 return _vendingDataProvider ??= new Dictionary<string, object>
                 {
+                    ["Plugin"] = Plugin,
                     ["GetData"] = new Func<JObject>(() => EntityData.VendingProfile as JObject),
                     ["SaveData"] = new Action<JObject>(vendingProfile =>
                     {
@@ -6834,6 +6837,8 @@ namespace Oxide.Plugins
                         EntityData.VendingProfile = vendingProfile;
                         Plugin._profileStore.Save(Profile);
                     }),
+                    ["GetSkin"] = new Func<ulong>(() => EntityData.Skin),
+                    ["SetSkin"] = new Action<ulong>(skinId => EntityData.Skin = skinId),
                 };
             }
 
@@ -7798,7 +7803,7 @@ namespace Oxide.Plugins
                         npcPlayer.VirtualInfoZone = virtualInfoZone;
                     }
 
-                    var humanNpc = npcPlayer as HumanNpc;
+                    var humanNpc = npcPlayer as HumanNPCGlobal;
                     if (humanNpc != null)
                     {
                         virtualInfoZone?.RegisterSleepableEntity(humanNpc.Brain);
