@@ -11,6 +11,7 @@ Easily spawn permanent entities at monuments, which auto respawn after restarts 
 - Works on any map seed and accounts for terrain height
 - Entities are indestructible, have no stability, free electricity, and cannot be picked up
 - Supports vanilla monuments, custom monuments, train tunnels, underwater labs, and cargo ship
+- Allows defining any entity prefab as a monument, in order to attach addons to it
 - Allows skinning spawned entities
 - (Advanced) Allows building monument puzzles
 - (Advanced) Allows placing spawn points for loot containers, key cards, vehicles, and more
@@ -20,7 +21,7 @@ Easily spawn permanent entities at monuments, which auto respawn after restarts 
 
 ## Required plugins
 
-- [Monument Finder](https://umod.org/plugins/monument-finder) -- Simply install. No configuration or permissions needed.
+- [Monument Finder](https://umod.org/plugins/monument-finder) -- Simply install. No configuration or permissions needed except for custom monuments.
 
 ## Recommended compatible plugins
 
@@ -134,9 +135,19 @@ Follow these steps to create example spawn points.
 The following commands only work on objects managed by this plugin. The effect of these commands automatically applies to all copies of the object at matching monuments, and also updates the data files.
 
 - `makill` -- Deletes the entity or spawn point that you are aiming at.
-  - For addons that do not have colliders, such as spawn points, the plugin will attempt to find a nearby addon within 2 meters of the surface you are looking at.
+  - For addons that do not have colliders, such as spawn points, the plugin will attempt to find a nearby addon within 2 meters of the surface you are looking at. If this does not work, you have to remove the addon from the profile data file manually.
 - `masave` -- Saves the current position and rotation of the entity you are aiming at. This is useful if you moved the entity with a plugin such as Edit Tool or Uber Tool. This is not necessary if you are repositioning entities with [Telekinesis](https://umod.org/plugins/telekinesis) since that will be automatically detected.
   - Also saves the building grade if looking at a foundation, wall, floor, etc.
+- `maflag <flag>` -- (Advanced) Toggles a flag between enabled/disabled/unspecified on the entity you are aiming at. When running this command without specifying a flag, the current/enabled/disabled flags will be printed. Allowed flags as of this writing: `Placeholder`, `On`, `OnFire`, `Open`, `Locked`, `Debugging`, `Disabled`, `Reserved1`, `Reserved2`, `Reserved3`, `Reserved4`, `Reserved5`, `Broken`, `Busy`, `Reserved6`, `Reserved7`, `Reserved8`, `Reserved9`, `Reserved10`, `Reserved11`, `InUse`, `Reserved12`, `Reserved13`, `Unused23`, `Protected`, `Transferring`.
+  - This plugin forces certain flags in some cases, meaning that enabling or disabling flags via this command may not always work as expected. If you discover an issue with the flags the plugin is overriding, open a support thread to discuss the use case.
+  - Even if you enable or disable a flag for a given entity, the game (or another plugin) may toggle the flag at any time (e.g., a recycler will toggle the `On` flag whenever it turns on/off). Overriding a flag with this plugin only ensures that the flag is enabled or disabled when the entity is spawned and when the profile or plugin reloads.
+  - **Don't ask me what each flag does.** These flags are defined by the game itself, not a concept introduced by this plugin. The function of each flag depends on the entity it's applied to. Most flags will have no effect on most entities. Some example use cases are described below, but please understand that it's not feasible to describe what each flag does in this documentation. To really understand what every flag does, you must read the game assemblies. You should only override flags when recommended for a specific use case by someone who has read the game assemblies. Experiment with flags at your own risk.
+    - `On` -- Determines some functional and cosmetic effects for various entities, such as furnaces, recyclers, some lights.
+    - `Locked` -- Determines whether a door or storage container can be opened.
+    - `Busy` -- Determines whether the entity can be interacted with.
+    - `Disabled` -- Determines whether the entity is visible.
+    - `Reserved8` -- Used by electrical entities to denote whether there is sufficient electricity.
+    - `Reserved9` -- Used by recyclers to determine recycle efficiency (by default, this flag is enabled on recyclers only in safe zones). You can forcibly enable or disable this flag to achieved the desired recycler efficiency (40% or 60%).
 - `maskin <skin id>` -- Updates the skin of the entity you are aiming at.
 - `masetid <id>` -- Updates the RC identifier of the CCTV camera you are aiming at.
   - Note: Each CCTV's RC identifier will have a numeric suffix like `1`, `2`, `3` and so on. This is done because some monuments may be duplicated, and each CCTV must have a unique identifier.
@@ -220,6 +231,11 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 {
   "Debug display distance": 150.0,
   "Persist entities while the plugin is unloaded": false,
+  "Dynamic monuments": {
+    "Entity prefabs to consider as monuments": [
+      "assets/content/vehicles/boats/cargoship/cargoshiptest.prefab"
+    ]
+  },
   "Deployable overrides": {
     "arcade.machine.chippy": "assets/bundled/prefabs/static/chippyarcademachine.static.prefab",
     "autoturret": "assets/content/props/sentry_scientists/sentry.bandit.static.prefab",
@@ -257,6 +273,9 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 - `Persist entities while the plugin is unloaded` (`true` or `false`) -- Determines whether entities spawned by `maspawn` will remain while the plugin is unloaded. Please carefully read and understand the documentation about this option before enabling it. Note: This option currently has no effect on Pastes, Spawn Groups or Custom Addons, meaning that those will always be despawned/respawned when the plugin reloads.
   - While `false` (default), when the plugin unloads, it will despawn all entities spawned via `maspawn`. When the plugin subsequently reloads, those entities will be respawned from scratch. This means, for entities that maintain state (such as player items temporarily residing in recyclers), that state will be lost whenever the plugin unloads. The most practical consequence of using this mode is that player items inside containers will be lost when a profile is reloaded, when the plugin is reloaded, or when the server reboots. Despite that limitation, `false` is the most simple and stable value for this option because it ensures consistent reproducibility across plugin reloads.
   - While `true`, when the plugin unloads, all entities spawned by via `maspawn` will remain, in order to preserve their state (e.g., items inside a recycler). When the plugin subsequently reloads, it will find the existing entities, reconcile how they differ from the enabled profiles, and despawn/respawn/reposition/modify them as needed. The plugin will try to avoid despawning/respawning an entity that is already present, in order to preserve the entity's state. Despite this sounding like the more obvious mode of the plugin, it is more complex and less stable than the default mode, and should therefore be enabled with caution.
+- `Dynamic monuments`
+  - `Entity prefabs to consider as monuments` -- Determines which entities are considered dynamic monuments. When an entity is considered a dynamic monument, you can define addons for it via `maspawn` and similar commands, and the plugin will ensure every instance of that entity has those addons attached. For example, Cargo Ship has been considered a dynamic monument since an early version of this plugin, but now you can define additional ones such as desert military base modules and road-side junk piles.
+    - Note: Updating this configuration is only necessary if you want to use `maspawn` and similar commands to recognize the entity as a monument. If you want to install an external profile that defines addons for a dynamic monument (such as the CargoShipCCTV profile), it isn't necessary to update this configuration because the plugin will automatically determine that the entity is a dynamic monument by reading the profile. Additionally, if you install an external profile which defines addons for a given dynamic monument, `maspawn` and similar commands will automatically recognize that entity as a dynamic monument. 
 - `Deployable overrides` -- Determines which entity will be spawned when using `maspawn` if you don't specify the entity name in the command. For example, while you are holding an auto turret, running `maspawn` will spawn the `sentry.bandit.static` prefab instead of the `autoturret_deployed` prefab.
 - `Xmas tree decorations (item short names)` -- Determines which decorations will be automatically added to `xmas_tree.deployed` entities spawned via `maspawn`.
 
@@ -266,7 +285,7 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 
 Since underwater labs are procedurally generated, this plugin does not spawn entities relative to the monuments themselves. Instead, entities are spawned relative to specific modules. For example, if you spawn an entity in a moonpool module, the entity will also be spawned at all moonpool modules in the same lab and other labs.
 
-Note that some modules have multiple possible vanilla configurations, so multiple instances of the same module might have slightly different placement of vanilla objects. That happens because Rust spawns semi-random dwelling entities in them, which you can learn about them with the `mashowvanilla` command. You can use that command to get an idea of where dwellings spawn, in order to avoid placing your addons at those locations. After spawning something into a lab module, it's also recommended to inspect other instances of that module to make sure the entity placement isn't overlapping a dwelling entity.
+Note that some modules have multiple possible vanilla configurations, so multiple instances of the same module might have slightly different placement of vanilla objects. That happens because Rust spawns semi-random dwelling entities in them, which you can learn about via the `mashowvanilla` command. You can use that command to get an idea of where dwellings spawn, in order to avoid placing your addons at those locations. After spawning something into a lab module, it's also recommended to inspect other instances of that module to make sure the entity placement isn't overlapping a dwelling entity.
 
 ## Instructions for sharing profiles
 
@@ -293,18 +312,16 @@ If you don't have a website to host a profile, you can simply send the profile d
 
 ### Sign Artist integration
 
-**Please donate if you use this feature for sponsorship revenue.**
-
 Use the following steps to set persistent images for signs or photo frames. Requires the [Sign Artist](https://umod.org/plugins/sign-artist) plugin to be installed with the appropriate permissions granted.
 
 1. Spawn a sign with `maspawn sign.large`. You can also use other sign entities, photo frames, neon signs, or carvable pumpkins.
 2. Use a Sign Artist command such as `sil`, `silt` or `sili` to apply an image to the sign.
 
-That's all you need to do. This plugin detects when you use a Sign Artist command and automatically saves the corresponding image URL or item short name in the profile's data file for that particular sign. When the plugin reloads, Sign Artist is called to reapply that image. Any change to a sign will also automatically propagate to all copies of that sign at other monuments.
+That's all you need to do. This plugin detects when you use a Sign Artist command and automatically saves the corresponding image URL or item short name in the profile's data file for that particular sign. When the plugin reloads, Sign Artist is called to reapply that image. Any change to a sign will also automatically propagate to all copies of that sign at duplicate monuments.
 
 Notes:
 - Only players with the `monumentaddons.admin` permission can edit signs that are managed by this plugin, so you don't have to worry about random players vandalizing the signs.
-- Due to a client bug with parenting, having multiple signs on cargo ship will cause them to all display the same image.
+- Due to a client bug with parenting, having multiple signs on a dynamic monument (such as Cargo Ship) will cause them to all display the same image.
 
 ### Entity Scale Manager integration
 
