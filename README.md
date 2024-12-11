@@ -126,7 +126,7 @@ Follow these steps to create example spawn points.
     - A monument is considered a match if it has the same short prefab name or the same alias as the monument you are aiming at. The Monument Finder plugin will assign aliases for primarily underground tunnels. For example, `station-sn-0` and `station-we-0` will both use the `TrainStation` alias, allowing all train stations to have the same entities.
   - Saves the entity info to the plugin data file so that reloading the plugin (or restarting the server) will respawn the entity.
 - `maprefab <prefab>` -- Creates an instance of a non-entity prefab. Note: This is **very** limited. Only prefabs with the `assets/bundled/prefabs/modding` path are supported, and the prefab instances are not networked to clients (because the game does not offer that capability) so they will be invisible, despite having real effects on the server side. This command is intended primarily for placing CH47 drop zones (`maprefab dropzone`), but it can also be used to place loot and NPC spawners that custom maps tend to use, although you will have much greater control of spawners when using the spawn point capabilities of the plugin instead.
-- `mapaste <file>` -- Pastes a building from the CopyPaste plugin, using the specified file name.
+- `mapaste <file> <optional_args>` -- Pastes a building from the CopyPaste plugin, using the specified file name. Supports all arguments provided by the CopyPaste plugin such as `height`.
 - `maundo` -- Undo a recent `makill` action.
 - `mashow <optional_profile_name> <optional_duration_in_seconds>` -- Shows debug information about nearby entities spawned by this plugin, for the specified duration. Defaults to 60 seconds.
   - Debug information is also automatically displayed for at least 60 seconds when using other commands.
@@ -176,6 +176,7 @@ The following commands only work on objects managed by this plugin. The effect o
 - `maspawngroup create <name>` -- Creates a spawn group **and** a spawn point where you are looking.
 - `maspawngroup set <option> <value>` -- Sets a property of the spawn group you are looking at.
   - `Name`: string -- This name must be unique for the given profile + monument. This name can be used to create additional spawn points for this spawn group using `maspawnpoint create <group_name>`.
+  - `Color`: string -- The debug color of the spawn group, when using `mashow`. Supports some color names such as "red", as well as HTML color codes like `#F90` and `#FF9900`. Set to `none` to revert to the default color controlled by the config.
   - `MaxPopulation`: number -- The maximum number of entities that can be spawned across all spawn points in this spawn group.
   - `RespawnDelayMin`: number -- The minimum time in seconds to wait between spawning entities.
   - `RespawnDelayMax`: number -- The maximum time in seconds to wait between spawning entities. Set to `0` to disable automated respawns, which is useful if you are associating the spawn group with a puzzle.
@@ -195,7 +196,7 @@ Note: `masg` can be used in place of `maspawngroup`.
 #### Spawn points
 
 - `maspawnpoint create <group_name>` -- Creates a spawn point where you are looking, for the specified spawn group. The spawn group must be in your selected profile and be at the same monument.
-- `maspawnpoint set <option> <value>` -- Sets a property of the spawn group you are looking at.
+- `maspawnpoint set <option> <value>` -- Sets a property of the spawn group you are looking at. You can also use `setall` to apply the change to all spawn points within the same spawn group.
   - `Exclusive`: true/false -- While `true`, only one entity can be spawned at this spawn point at a time.
   - `DropToGround`: true/false -- While `true`, entities will be spawned on the nearest flat surface below the spawn point.
   - `CheckSpace`: true/false -- While `true`, entities can only spawn at this spawn point when there is sufficient space. This option is recommended for vehicle spawn points.
@@ -229,12 +230,53 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 
 ```json
 {
-  "Debug display distance": 150.0,
-  "Persist entities while the plugin is unloaded": false,
+  "Debug display settings": {
+    "Default display duration (seconds)": 60.0,
+    "Display distance": 100.0,
+    "Display distance abbreviated": 200.0,
+    "Max addons to show unabbreviated": 1,
+    "Entity color": "#FF00FF",
+    "Spawn point color": "#FF8000",
+    "Paste color": "#00FFFF",
+    "Custom addon color": "#00FF00",
+    "Custom monument color": "#00FF00",
+    "Inactive profile color": "#808080"
+  },
+  "Save entities between restarts/reloads to preserve their state throughout a wipe": {
+    "Enable saving for storage entities": false,
+    "Enable saving for non-storage entities": false,
+    "Override saving enabled by prefab": {}
+  },
   "Dynamic monuments": {
     "Entity prefabs to consider as monuments": [
       "assets/content/vehicles/boats/cargoship/cargoshiptest.prefab"
     ]
+  },
+  "Addon defaults": {
+    "Spawn group defaults": {
+      "MaxPopulation": 1,
+      "SpawnPerTickMin": 1,
+      "SpawnPerTickMax": 2,
+      "RespawnDelayMin": 1500.0,
+      "RespawnDelayMax": 2100.0,
+      "InitialSpawn": true,
+      "PreventDuplicates": false,
+      "PauseScheduleWhileFull": false,
+      "RespawnWhenNearestPuzzleResets": false
+    },
+    "Spawn point defaults": {
+      "Exclusive": true,
+      "SnapToGround": true,
+      "CheckSpace": false,
+      "RandomRotation": false,
+      "RandomRadius": 0.0,
+      "PlayerDetectionRadius": 0.0
+    },
+    "Puzzle defaults": {
+      "PlayersBlockReset": true,
+      "PlayerDetectionRadius": 30.0,
+      "SecondsBetweenResets": 1800.0
+    }
   },
   "Deployable overrides": {
     "arcade.machine.chippy": "assets/bundled/prefabs/static/chippyarcademachine.static.prefab",
@@ -269,13 +311,33 @@ Profiles allow you to organize entities into groups. Each profile can be indepen
 }
 ```
 
-- `Debug display distance` -- Determines how far away you can see debug information about entities (i.e., when using `mashow`).
-- `Persist entities while the plugin is unloaded` (`true` or `false`) -- Determines whether entities spawned by `maspawn` will remain while the plugin is unloaded. Please carefully read and understand the documentation about this option before enabling it. Note: This option currently has no effect on Pastes, Spawn Groups or Custom Addons, meaning that those will always be despawned/respawned when the plugin reloads.
-  - While `false` (default), when the plugin unloads, it will despawn all entities spawned via `maspawn`. When the plugin subsequently reloads, those entities will be respawned from scratch. This means, for entities that maintain state (such as player items temporarily residing in recyclers), that state will be lost whenever the plugin unloads. The most practical consequence of using this mode is that player items inside containers will be lost when a profile is reloaded, when the plugin is reloaded, or when the server reboots. Despite that limitation, `false` is the most simple and stable value for this option because it ensures consistent reproducibility across plugin reloads.
-  - While `true`, when the plugin unloads, all entities spawned by via `maspawn` will remain, in order to preserve their state (e.g., items inside a recycler). When the plugin subsequently reloads, it will find the existing entities, reconcile how they differ from the enabled profiles, and despawn/respawn/reposition/modify them as needed. The plugin will try to avoid despawning/respawning an entity that is already present, in order to preserve the entity's state. Despite this sounding like the more obvious mode of the plugin, it is more complex and less stable than the default mode, and should therefore be enabled with caution.
+- `Debug display settings` -- Determines the appearance of addon debug information (i.e., when using `mashow`). Note that running most commands in the plugin will automatically show or renew debug information for a period of time.
+  - `Default display duration (seconds)` -- Determines how long debug information will be displayed when using `mashow` without specifying the duration, or when automatically showing debug information due to running a relevant command.
+  - `Display distance` -- Determines how far away you can see full debug information about addons.
+  - `Display distance abbreviated` -- Determines how far away you can see an abbreviated symbol for addons, instead of the full debug information, to reduce screen clutter. This number should be set higher than `Display distance`.
+  - `Max addons to show unabbreviated` -- Determines how many addons you can see unabbreviated at once. When there are more than this number of addons within `Display distance`, addons closer to where you are aiming will be prioritized. This number should be set low to reduce screen clutter.
+  - `Entity color` -- Determines the debug text color for entity addons (the most common type of addon).
+  - `Spawn point color` -- Determines the debug text color for spawn point addons.
+  - `Paste color` -- Determines the debug text color for paste addons.
+  - `Custom addon color` -- Determines the debug text color for custom addons registered by other plugins.
+  - `Custom monument color` -- Determines the debug text color for custom monuments registered by other plugins.
+  - `Inactive profile color` -- Determines the debug text color for addons that are not part of the specified profile (i.e., when using `mashow <profile_name>`).
+- `Save entities between restarts/reloads to preserve their state throughout a wipe` -- Determines whether entities spawned by `maspawn` will remain while the plugin is unloaded, and will be saved by Rust across server restarts. Please carefully read and understand the documentation about this option before enabling it. Note: This option currently has no effect on Pastes, Spawn Groups or Custom Addons, nor for any addons placed at monuments registered via the Custom Monument API, meaning that those addons will always be despawned/respawned when the plugin reloads.
+  - While saving is disabled (`false`), when the plugin unloads, it will despawn all entities spawned via `maspawn`. When the plugin subsequently reloads, those entities will be respawned from scratch. This means, for entities that maintain state (such as player items temporarily residing in recyclers), that state will be lost whenever the plugin unloads. The most practical consequence of using this mode is that player items inside containers will be lost when a profile is reloaded, when the plugin is reloaded, or when the server reboots. Despite that limitation, having saving disabled is the most simple and stable value for this option because it ensures consistent reproducibility across plugin reloads.
+  - While saving is enabled (`true`), when the plugin unloads, all entities spawned by via `maspawn` will remain, in order to preserve their state (e.g., items inside a recycler). When the plugin subsequently reloads, it will find the existing entities, reconcile how they differ from the enabled profiles, and despawn/respawn/reposition/modify them as needed. The plugin will try to avoid despawning/respawning an entity that is already present, in order to preserve the entity's state. Despite this sounding like the more obvious mode of the plugin, it is more complex and less stable than the default mode, and should therefore be enabled with caution.
+  - `Enable saving for storage entities` (`true` or `false`) -- Applies to all entities that the plugin classifies as storage entities. This category includes hundreds of prefabs, including recyclers, furnaces, research tables, vending machines, and mining quarries. Enabling this is useful especially for vending machines as it will allow Custom Vending Setup to save dynamic prices throughout a wipe.
+  - `Enable saving for non-storage entities` (`true` or `false)` -- Applies to all entities that the plugin doesn't classify as storage entities. It's recommended to keep this disabled as there is a low but nonetheless real risk of "double entities" in some edge cases if you enable saving for anything. If you have specific entity prefabs that you know need their state saved, you can override them via `Override saving enabled by prefab`.
+  - `Override saving enabled by prefab` -- Allows you to forcibly enable or disable saving of specific entity prefabs regardless of whether you have enabled saving for the entity category. Example below.
+    ```json
+    "Override saving enabled by prefab": {
+      "assets/prefabs/deployable/vendingmachine/npcvendingmachine": true,
+      "assets/prefabs/deployable/vendingmachine/npcvendingmachines/shopkeeper_vm_invis": true
+    }
+    ```
 - `Dynamic monuments`
   - `Entity prefabs to consider as monuments` -- Determines which entities are considered dynamic monuments. When an entity is considered a dynamic monument, you can define addons for it via `maspawn` and similar commands, and the plugin will ensure every instance of that entity has those addons attached. For example, Cargo Ship has been considered a dynamic monument since an early version of this plugin, but now you can define additional ones such as desert military base modules and road-side junk piles.
     - Note: Updating this configuration is only necessary if you want to use `maspawn` and similar commands to recognize the entity as a monument. If you want to install an external profile that defines addons for a dynamic monument (such as the CargoShipCCTV profile), it isn't necessary to update this configuration because the plugin will automatically determine that the entity is a dynamic monument by reading the profile. Additionally, if you install an external profile which defines addons for a given dynamic monument, `maspawn` and similar commands will automatically recognize that entity as a dynamic monument. 
+- `Addon defaults` -- Determines the default values for various addon parameters when placing new addons. These options do not affect addons which have already been placed. To understand these options, see the documentation for the respective commands (`maspawngroup`, `maspawnpoint`, `mapuzzle`).
 - `Deployable overrides` -- Determines which entity will be spawned when using `maspawn` if you don't specify the entity name in the command. For example, while you are holding an auto turret, running `maspawn` will spawn the `sentry.bandit.static` prefab instead of the `autoturret_deployed` prefab.
 - `Xmas tree decorations (item short names)` -- Determines which decorations will be automatically added to `xmas_tree.deployed` entities spawned via `maspawn`.
 
@@ -413,4 +475,57 @@ Note: Kinetic IO elements such as `wheelswitch` and `sliding_blast_door` are not
 
 ## Uninstallation
 
-Ensure the plugin is loaded with `Persist entities while the plugin is unloaded` set to `false`, then simply remove the plugin. All addons will be automatically removed.
+Ensure the plugin is loaded with saving disabled for all types of entities, then simply remove the plugin. All addons will be automatically removed.
+
+## Developer API
+
+### API_RegisterCustomAddon (experimental)
+
+Coming soon. For early access, see [Custom Addons API documentation](https://github.com/WheteThunger/MonumentAddons/blob/master/CustomAddons/README.md).
+
+### API_RegisterCustomMonument
+
+See [Custom Monuments API documentation](https://github.com/WheteThunger/MonumentAddons/blob/master/CustomMonuments/README.md).
+
+## Developer hooks
+
+### OnMonumentAddonsInitialized
+
+```
+void OnMonumentAddonsInitialized()
+```
+
+- Called after this plugin has loaded and finished spawning all addons for all enabled profiles
+
+### OnMonumentEntitySpawned
+
+```
+void OnMonumentEntitySpawned(BaseEntity entity, UnityEngine.Component monument, Guid guid)
+```
+
+- Called after this plugin has spawned an entity at a monument
+- Called only for entity addons, not for entities spanwed by spawn points, but this may change in the future (possibly a new hook in the future)
+- The `component` parameter represents the monument object
+- The `guid` parameter refers to the unique ID present in the profile data file
+- Note: When the plugin is configured to save entities, this hook will be called again when the plugin finds and registers the existing entity (the entity will not technically be respawned, although the hook name suggests it was spawned)
+
+### OnMonumentPrefabCreated
+
+```
+void OnMonumentPrefabCreated(GameObject gameObject, Component monument, Guid guid)
+```
+
+- Called after this plugin has created a non-entity prefab at a monument
+- Called only for addons placed via `maprefab`
+- The `component` parameter represents the monument object
+- The `guid` parameter refers to the unique ID present in the profile data file
+
+### OnDynamicMonument
+
+```
+object OnDynamicMonument(BaseEntity entity)
+```
+
+- Called when this plugin wants to evaluate whether a given entity can be considered a dynamic monument.
+- Called only for entity prefabs configured under `Dynamic monuments` -> `Entity prefabs to consider as monuments`
+- Returning `false` will prevent that specific entity from being considered a custom monument
