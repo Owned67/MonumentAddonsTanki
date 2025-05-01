@@ -46,7 +46,7 @@ using Tuple4 = System.ValueTuple<object, object, object, object>;
 
 namespace Oxide.Plugins
 {
-    [Info("Monument Addons", "WhiteThunder", "0.18.4")]
+    [Info("Monument Addons", "WhiteThunder", "0.18.5")]
     [Description("Allows adding entities, spawn points and more to monuments.")]
     internal class MonumentAddons : CovalencePlugin
     {
@@ -588,6 +588,124 @@ namespace Oxide.Plugins
                 return null;
 
             return ObjectCache.Get(adapter.Data.Id);
+        }
+
+        [HookMethod(nameof(API_RegisterCustomAddon))]
+        public Dictionary<string, object> API_RegisterCustomAddon(Plugin plugin, string addonName, Dictionary<string, object> addonSpec)
+        {
+            var addonDefinition = CustomAddonDefinition.FromDictionary(addonName, plugin, addonSpec);
+            if (!addonDefinition.Validate())
+                return null;
+
+            if (_customAddonManager.IsRegistered(addonName, out var otherPlugin))
+            {
+                if (otherPlugin.Name != plugin.Name)
+                {
+                    LogError($"Unable to register custom addon \"{addonName}\" for plugin {plugin.Name} because it's already been registered by plugin {otherPlugin.Name}.");
+                    return null;
+                }
+            }
+            else
+            {
+                _customAddonManager.RegisterAddon(addonDefinition);
+            }
+
+            return addonDefinition.ToApiResult(_profileStore);
+        }
+
+        [HookMethod(nameof(API_RegisterCustomMonument))]
+        public object API_RegisterCustomMonument(Plugin plugin, string monumentName, Component component, Bounds bounds)
+        {
+            var objectType = component is BaseEntity ? "entity" : "object";
+
+            if (plugin == null)
+            {
+                LogError($"A plugin has attempted to register an {objectType} as a custom monument, but the plugin did not identify itself.");
+                return False;
+            }
+
+            if (String.IsNullOrWhiteSpace(monumentName))
+            {
+                LogError($"Plugin {plugin.Name} tried to register an {objectType} as a custom monument, but did not provide a valid monument name.");
+                return False;
+            }
+
+            if (component == null || (component is BaseEntity { IsDestroyed: true }))
+            {
+                LogError($"Plugin {plugin.Name} tried to register a null or destroyed {objectType} as a custom monument.");
+                return False;
+            }
+
+            if (bounds == default)
+            {
+                LogWarning($"Plugin {plugin.Name} tried to register an {objectType} as a custom monument, but did not provide bounds. This was most likely a mistake by the developer of {plugin.Name} ({plugin.Author}).");
+            }
+
+            var existingMonument = _customMonumentManager.FindByComponent(component);
+            if (existingMonument != null)
+            {
+                if (existingMonument.OwnerPlugin.Name != plugin.Name)
+                {
+                    LogError($"Plugin {plugin.Name} tried to register an {objectType} at {component.transform.position} as a custom monument with name '{monumentName}', but that {objectType} was already registered by plugin {existingMonument.OwnerPlugin.Name} with name '{existingMonument.UniqueName}'.");
+                    return False;
+                }
+                else if (existingMonument.UniqueName != monumentName)
+                {
+                    LogError($"Plugin {plugin.Name} tried to register an {objectType} at {component.transform.position} as a custom monument with name '{monumentName}', but that {objectType} was already registered with name '{existingMonument.UniqueName}'.");
+                    return False;
+                }
+                else if (existingMonument.Bounds != bounds)
+                {
+                    // Changing the bounds is permitted.
+                    existingMonument.Bounds = bounds;
+                    return True;
+                }
+                else
+                {
+                    LogWarning($"Plugin {plugin.Name} tried to double register a monument '{monumentName}'. This is OK but may be a mistake by the developer of {plugin.Name} ({plugin.Author}).");
+                    return True;
+                }
+            }
+
+            var monument = component is BaseEntity entity
+                ? new CustomEntityMonument(plugin, entity, monumentName, bounds)
+                : new CustomMonument(plugin, component, monumentName, bounds);
+
+            _customMonumentManager.Register(monument);
+            CustomMonumentComponent.AddToMonument(_customMonumentManager, monument);
+            _coroutineManager.StartCoroutine(_profileManager.PartialLoadForLateMonumentRoutine(monument));
+
+            LogInfo($"Plugin {plugin.Name} successfully registered an {objectType} at {component.transform.position} as a custom monument with name '{monumentName}'.");
+            return True;
+        }
+
+        [HookMethod(nameof(API_UnregisterCustomMonument))]
+        public object API_UnregisterCustomMonument(Plugin plugin, Component component)
+        {
+            var objectType = component is BaseEntity ? "entity" : "object";
+
+            if (component == null || (component is BaseEntity { IsDestroyed: true }))
+            {
+                LogWarning($"Plugin {plugin.Name} tried to unregister a null or destroyed {objectType} as a custom monument. This is not necessary because {Name} automatically detects when custom monuments are destroyed and despawns associated addons. This is OK but may be a mistake by the developer of {plugin.Name} ({plugin.Author}).");
+                return True;
+            }
+
+            var existingMonument = _customMonumentManager.FindByComponent(component);
+            if (existingMonument == null)
+            {
+                LogError($"Plugin {plugin.Name} tried to unregister an {objectType} at {component.transform.position} as a custom monument, but that {objectType} was not currently registered as a custom monument. Either the {objectType} was unregistered earlier, or the wrong {objectType} was provided. This was most likely a mistake by the developer of {plugin.Name} ({plugin.Author}).");
+                return True;
+            }
+
+            if (existingMonument.OwnerPlugin.Name != plugin.Name)
+            {
+                LogError($"Plugin {plugin.Name} tried to unregister an {objectType} at {component.transform.position} as a custom monument, but that {objectType} was registered as a custom monument by plugin {existingMonument.OwnerPlugin.Name}, so this was not allowed.");
+                return False;
+            }
+
+            _customMonumentManager.Unregister(existingMonument);
+            LogInfo($"Plugin {plugin.Name} successfully unregistered an {objectType} at {component.transform.position} as a custom monument with name '{existingMonument.UniqueName}'.");
+            return True;
         }
 
         #endregion
@@ -2900,128 +3018,6 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region API
-
-        [HookMethod(nameof(API_RegisterCustomAddon))]
-        public Dictionary<string, object> API_RegisterCustomAddon(Plugin plugin, string addonName, Dictionary<string, object> addonSpec)
-        {
-            var addonDefinition = CustomAddonDefinition.FromDictionary(addonName, plugin, addonSpec);
-            if (!addonDefinition.Validate())
-                return null;
-
-            if (_customAddonManager.IsRegistered(addonName, out var otherPlugin))
-            {
-                if (otherPlugin.Name != plugin.Name)
-                {
-                    LogError($"Unable to register custom addon \"{addonName}\" for plugin {plugin.Name} because it's already been registered by plugin {otherPlugin.Name}.");
-                    return null;
-                }
-            }
-            else
-            {
-                _customAddonManager.RegisterAddon(addonDefinition);
-            }
-
-            return addonDefinition.ToApiResult(_profileStore);
-        }
-
-        [HookMethod(nameof(API_RegisterCustomMonument))]
-        public object API_RegisterCustomMonument(Plugin plugin, string monumentName, Component component, Bounds bounds)
-        {
-            var objectType = component is BaseEntity ? "entity" : "object";
-
-            if (plugin == null)
-            {
-                LogError($"A plugin has attempted to register an {objectType} as a custom monument, but the plugin did not identify itself.");
-                return False;
-            }
-
-            if (String.IsNullOrWhiteSpace(monumentName))
-            {
-                LogError($"Plugin {plugin.Name} tried to register an {objectType} as a custom monument, but did not provide a valid monument name.");
-                return False;
-            }
-
-            if (component == null || (component is BaseEntity { IsDestroyed: true }))
-            {
-                LogError($"Plugin {plugin.Name} tried to register a null or destroyed {objectType} as a custom monument.");
-                return False;
-            }
-
-            if (bounds == default)
-            {
-                LogWarning($"Plugin {plugin.Name} tried to register an {objectType} as a custom monument, but did not provide bounds. This was most likely a mistake by the developer of {plugin.Name} ({plugin.Author}).");
-            }
-
-            var existingMonument = _customMonumentManager.FindByComponent(component);
-            if (existingMonument != null)
-            {
-                if (existingMonument.OwnerPlugin.Name != plugin.Name)
-                {
-                    LogError($"Plugin {plugin.Name} tried to register an {objectType} at {component.transform.position} as a custom monument with name '{monumentName}', but that {objectType} was already registered by plugin {existingMonument.OwnerPlugin.Name} with name '{existingMonument.UniqueName}'.");
-                    return False;
-                }
-                else if (existingMonument.UniqueName != monumentName)
-                {
-                    LogError($"Plugin {plugin.Name} tried to register an {objectType} at {component.transform.position} as a custom monument with name '{monumentName}', but that {objectType} was already registered with name '{existingMonument.UniqueName}'.");
-                    return False;
-                }
-                else if (existingMonument.Bounds != bounds)
-                {
-                    // Changing the bounds is permitted.
-                    existingMonument.Bounds = bounds;
-                    return True;
-                }
-                else
-                {
-                    LogWarning($"Plugin {plugin.Name} tried to double register a monument '{monumentName}'. This is OK but may be a mistake by the developer of {plugin.Name} ({plugin.Author}).");
-                    return True;
-                }
-            }
-
-            var monument = component is BaseEntity entity
-                ? new CustomEntityMonument(plugin, entity, monumentName, bounds)
-                : new CustomMonument(plugin, component, monumentName, bounds);
-
-            _customMonumentManager.Register(monument);
-            CustomMonumentComponent.AddToMonument(_customMonumentManager, monument);
-            _coroutineManager.StartCoroutine(_profileManager.PartialLoadForLateMonumentRoutine(monument));
-
-            LogInfo($"Plugin {plugin.Name} successfully registered an {objectType} at {component.transform.position} as a custom monument with name '{monumentName}'.");
-            return True;
-        }
-
-        [HookMethod(nameof(API_UnregisterCustomMonument))]
-        public object API_UnregisterCustomMonument(Plugin plugin, Component component)
-        {
-            var objectType = component is BaseEntity ? "entity" : "object";
-
-            if (component == null || (component is BaseEntity { IsDestroyed: true }))
-            {
-                LogWarning($"Plugin {plugin.Name} tried to unregister a null or destroyed {objectType} as a custom monument. This is not necessary because {Name} automatically detects when custom monuments are destroyed and despawns associated addons. This is OK but may be a mistake by the developer of {plugin.Name} ({plugin.Author}).");
-                return True;
-            }
-
-            var existingMonument = _customMonumentManager.FindByComponent(component);
-            if (existingMonument == null)
-            {
-                LogError($"Plugin {plugin.Name} tried to unregister an {objectType} at {component.transform.position} as a custom monument, but that {objectType} was not currently registered as a custom monument. Either the {objectType} was unregistered earlier, or the wrong {objectType} was provided. This was most likely a mistake by the developer of {plugin.Name} ({plugin.Author}).");
-                return True;
-            }
-
-            if (existingMonument.OwnerPlugin.Name != plugin.Name)
-            {
-                LogError($"Plugin {plugin.Name} tried to unregister an {objectType} at {component.transform.position} as a custom monument, but that {objectType} was registered as a custom monument by plugin {existingMonument.OwnerPlugin.Name}, so this was not allowed.");
-                return False;
-            }
-
-            _customMonumentManager.Unregister(existingMonument);
-            LogInfo($"Plugin {plugin.Name} successfully unregistered an {objectType} at {component.transform.position} as a custom monument with name '{existingMonument.UniqueName}'.");
-            return True;
-        }
-
-        #endregion
-
         #region Utilities
 
         private static class ObjectCache
@@ -4197,7 +4193,7 @@ namespace Oxide.Plugins
             if (entity is NPCPlayer and not NPCShopKeeper and not BanditGuard)
                 return true;
 
-            if (entity is BaseBoat or BaseHelicopter or BaseRidableAnimal or BaseSubmarine or BasicCar or GroundVehicle or HotAirBalloon or Sled or TrainCar)
+            if (entity is BaseBoat or BaseHelicopter or RidableHorse or BaseSubmarine or BasicCar or GroundVehicle or HotAirBalloon or Sled or TrainCar)
                 return true;
 
             return false;
@@ -8552,6 +8548,8 @@ namespace Oxide.Plugins
                 ["assets/content/vehicles/trains/caboose/traincaboose.entity.prefab"] = TrainCarLayerMask,
             };
 
+            private static readonly Vector3 SpaceCheckRelativeOffset = new Vector3(0, 0.05f, 0);
+
             public static CustomSpawnPoint AddToGameObject(AddonComponentTracker componentTracker, GameObject gameObject, SpawnPointAdapter adapter, SpawnPointData spawnPointData)
             {
                 var component = gameObject.AddComponent<CustomSpawnPoint>();
@@ -8569,6 +8567,7 @@ namespace Oxide.Plugins
             private Transform _transform;
             private BaseEntity _parentEntity;
             private List<SpawnPointInstance> _instances = new List<SpawnPointInstance>();
+            private Vector3 SpaceCheckPosition => _transform.TransformPoint(SpaceCheckRelativeOffset);
 
             public void PreUnload()
             {
@@ -8650,8 +8649,7 @@ namespace Oxide.Plugins
                 if (spawnEntry.CustomAddonDefinition != null)
                 {
                     if (_spawnPointData.CheckSpace)
-                        // Pass null data for now since data isn't supported for custom addons with spawn points.
-                        return spawnEntry.CustomAddonDefinition.CheckSpace?.Invoke(_transform.position, _transform.rotation, null) ?? true;
+                        return HasSpace(spawnEntry.CustomAddonDefinition);
 
                     return true;
                 }
@@ -8665,12 +8663,7 @@ namespace Oxide.Plugins
                     return false;
 
                 if (_spawnPointData.CheckSpace)
-                {
-                    if (CustomBoundsCheckMask.TryGetValue(prefab.name, out var customBoundsCheckMask))
-                        return SpawnHandler.CheckBounds(prefab, _transform.position, _transform.rotation, Vector3.one, customBoundsCheckMask);
-
-                    return SingletonComponent<SpawnHandler>.Instance.CheckBounds(prefab, _transform.position, _transform.rotation, Vector3.one);
-                }
+                    return HasSpace(prefab);
 
                 return true;
             }
@@ -8712,6 +8705,28 @@ namespace Oxide.Plugins
                 }
             }
 
+            public bool HasSpace(CustomSpawnGroup.SpawnEntry spawnEntry)
+            {
+                if (spawnEntry.CustomAddonDefinition != null)
+                    return HasSpace(spawnEntry.CustomAddonDefinition);
+
+                return HasSpace(spawnEntry.Prefab.Get());
+            }
+
+            private bool HasSpace(CustomAddonDefinition customAddonDefinition)
+            {
+                // Pass null data for now since data isn't supported for custom addons with spawn points.
+                return customAddonDefinition.CheckSpace?.Invoke(SpaceCheckPosition, _transform.rotation, null) ?? true;
+            }
+
+            private bool HasSpace(GameObject prefab)
+            {
+                if (CustomBoundsCheckMask.TryGetValue(prefab.name, out var customBoundsCheckMask))
+                    return SpawnHandler.CheckBounds(prefab, SpaceCheckPosition, _transform.rotation, Vector3.one, customBoundsCheckMask);
+
+                return SingletonComponent<SpawnHandler>.Instance.CheckBounds(prefab, SpaceCheckPosition, _transform.rotation, Vector3.one);
+            }
+
             private bool IsVehicle(BaseEntity entity)
             {
                 return entity is HotAirBalloon || entity is BaseVehicle;
@@ -8721,6 +8736,9 @@ namespace Oxide.Plugins
             {
                 switch (vehicle)
                 {
+                    case BaseSiegeWeapon siegeWeapon:
+                        siegeWeapon.lastUseTime = float.MaxValue;
+                        break;
                     case BaseSubmarine sub:
                         sub.timeSinceLastUsed = float.MinValue;
                         break;
@@ -8728,7 +8746,7 @@ namespace Oxide.Plugins
                         bike.timeSinceLastUsed = float.MinValue;
                         break;
                     case HotAirBalloon hab:
-                        hab.sinceLastBlast = float.MaxValue;
+                        hab.sinceLastBlast = float.MinValue;
                         break;
                     case Kayak kayak:
                         kayak.timeSinceLastUsed = float.MinValue;
@@ -8743,7 +8761,7 @@ namespace Oxide.Plugins
                         heli.lastEngineOnTime = float.MaxValue;
                         break;
                     case RidableHorse horse:
-                        horse.lastInputTime = float.MaxValue;
+                        horse.lastRiddenTime = float.MaxValue;
                         break;
                     case Snowmobile snowmobile:
                         snowmobile.timeSinceLastUsed = float.MinValue;
@@ -8835,6 +8853,35 @@ namespace Oxide.Plugins
             public void Init(SpawnGroupAdapter spawnGroupAdapter)
             {
                 SpawnGroupAdapter = spawnGroupAdapter;
+            }
+
+            public bool TryFindSpawnEntry(WeightedPrefabData prefabData, out SpawnEntry spawnEntry)
+            {
+                foreach (var entry in SpawnEntries)
+                {
+                    if (entry.CustomAddonDefinition != null)
+                    {
+                        if (entry.CustomAddonDefinition.AddonName == prefabData.CustomAddonName)
+                        {
+                            spawnEntry = entry;
+                            return true;
+                        }
+
+                        continue;
+                    }
+
+                    if (GameManifest.pathToGuid.TryGetValue(prefabData.PrefabName, out var guid))
+                    {
+                        if (entry.Prefab.guid == guid)
+                        {
+                            spawnEntry = entry;
+                            return true;
+                        }
+                    }
+                }
+
+                spawnEntry = null;
+                return false;
             }
 
             public void UpdateSpawnClock()
@@ -10928,7 +10975,15 @@ namespace Oxide.Plugins
                             {
                                 displayName += " (!)";
                             }
-                            _sb.AppendLine(_plugin.GetMessage(player.UserIDString, LangEntry.ShowLabelEntityDetail, displayName, prefabEntry.Weight, relativeChance));
+
+                            var entityMessage = _plugin.GetMessage(player.UserIDString, LangEntry.ShowLabelEntityDetail, displayName, prefabEntry.Weight, relativeChance);
+                            if (spawnGroupAdapter.SpawnGroup.TryFindSpawnEntry(prefabEntry, out var spawnEntry)
+                                && !adapter.SpawnPoint.HasSpace(spawnEntry))
+                            {
+                                entityMessage += $" | {_plugin.GetMessage(player.UserIDString, LangEntry.ShowLabelEntityNoSpace)}";
+                            }
+
+                            _sb.AppendLine(entityMessage);
                         }
                     }
                     else
@@ -14621,6 +14676,7 @@ namespace Oxide.Plugins
             public static readonly LangEntry0 ShowLabelNextSpawnPaused = new("Show.Label.NextSpawn.Paused", "Paused");
             public static readonly LangEntry0 ShowLabelEntities = new("Show.Label.Entities", "Entities:");
             public static readonly LangEntry3 ShowLabelEntityDetail = new("Show.Label.Entities.Detail2", "{0} | weight: {1} ({2:P1})");
+            public static readonly LangEntry0 ShowLabelEntityNoSpace = new("Show.Label.Entities.NoSpace", "No space");
             public static readonly LangEntry0 ShowLabelNoEntities = new("Show.Label.NoEntities", "No entities configured. Run /maspawngroup add <entity> <weight>");
             public static readonly LangEntry1 ShowLabelPlayerDetectionRadius = new("Show.Label.PlayerDetectionRadius", "Player detection radius: {0:f1}");
             public static readonly LangEntry0 ShowLabelPlayerDetectedInRadius = new("Show.Label.PlayerDetectedInRadius", "(!) Player detected in radius (!)");
